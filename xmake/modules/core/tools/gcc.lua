@@ -30,9 +30,7 @@ import("private.tools.ccache")
 function init(self)
 
     -- init mxflags
-    self:set("mxflags", "-fmessage-length=0"
-                      , "-pipe"
-                      , "-fpascal-strings"
+    self:set("mxflags", "-pipe"
                       , "-DIBOutlet=__attribute__((iboutlet))"
                       , "-DIBOutletCollection(ClassName)=__attribute__((iboutletcollection(ClassName)))"
                       , "-DIBAction=void)__attribute__((ibaction)")
@@ -73,43 +71,43 @@ end
 
 -- make the strip flag
 function nf_strip(self, level)
-
-    -- the maps
     local maps = 
     {   
         debug = "-S"
     ,   all   = "-s"
     }
 
-    -- for macho target
     local plat = config.plat()
     if plat == "macosx" or plat == "iphoneos" then
         maps.all   = "-Wl,-x"
         maps.debug = "-Wl,-S"
     end
-
-    -- make it
     return maps[level]
 end
 
 -- make the symbol flag
 function nf_symbol(self, level)
-
-    -- the maps
-    local maps = 
-    {   
-        debug  = "-g"
-    ,   hidden = "-fvisibility=hidden"
-    }
-
-    -- make it
-    return maps[level] 
+    -- only for source kind
+    local kind = self:kind()
+    if language.sourcekinds()[kind] then
+        local maps = _g.symbol_maps
+        if not maps then
+            maps =
+            {   
+                debug  = "-g"
+            ,   hidden = "-fvisibility=hidden"
+            }
+            if kind == "cxx" and self:has_flags("-fvisibility-inlines-hidden", "cxflags") then
+                maps.hidden_cxx = {"-fvisibility=hidden", "-fvisibility-inlines-hidden"}
+            end
+            _g.symbol_maps = maps
+        end
+        return maps[level .. '_' .. kind] or maps[level]
+    end
 end
 
 -- make the warning flag
 function nf_warning(self, level)
-
-    -- the maps
     local maps = 
     {   
         none       = "-w"
@@ -119,15 +117,11 @@ function nf_warning(self, level)
     ,   everything = "-Wall -Wextra -Weffc++"
     ,   error      = "-Werror"
     }
-
-    -- make it
     return maps[level]
 end
 
 -- make the optimize flag
 function nf_optimize(self, level)
-
-    -- the maps
     local maps = 
     {   
         none       = "-O0"
@@ -137,15 +131,11 @@ function nf_optimize(self, level)
     ,   smallest   = "-Os"
     ,   aggressive = "-Ofast"
     }
-
-    -- make it
     return maps[level] 
 end
 
 -- make the vector extension flag
 function nf_vectorext(self, extension)
-
-    -- the maps
     local maps = 
     {   
         mmx   = "-mmmx"
@@ -157,8 +147,6 @@ function nf_vectorext(self, extension)
     ,   avx2  = "-mavx2"
     ,   neon  = "-mfpu=neon"
     }
-
-    -- make it
     return maps[extension] 
 end
 
@@ -319,13 +307,13 @@ function linkargv(self, objectfiles, targetkind, targetfile, flags, opt)
 
     -- add rpath for dylib (macho), e.g. -install_name @rpath/file.dylib
     local flags_extra = {}
-    if targetkind == "shared" and targetfile:endswith(".dylib") then
+    if targetkind == "shared" and is_plat("macosx", "iphoneos", "watchos") then
         table.insert(flags_extra, "-install_name")
         table.insert(flags_extra, "@rpath/" .. path.filename(targetfile))
     end
 
     -- add `-Wl,--out-implib,outputdir/libxxx.a` for xxx.dll on mingw/gcc
-    if targetkind == "shared" and config.plat() == "mingw" then
+    if targetkind == "shared" and is_plat("mingw") then
         table.insert(flags_extra, "-Wl,--out-implib," .. os.args(path.join(path.directory(targetfile), path.basename(targetfile) .. ".lib")))
     end
 
@@ -335,7 +323,7 @@ function linkargv(self, objectfiles, targetkind, targetfile, flags, opt)
     -- too long arguments for windows? 
     if is_host("windows") then
         opt = opt or {}
-        local args = os.args(argv)
+        local args = os.args(argv, {escape = true})
         if #args > 1024 and not opt.rawargs then
             local argsfile = os.tmpfile(args) .. ".args.txt" 
             io.writefile(argsfile, args)

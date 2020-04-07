@@ -43,6 +43,7 @@ sandbox_os.exit         = os.exit
 sandbox_os.date         = os.date
 sandbox_os.time         = os.time
 sandbox_os.args         = os.args
+sandbox_os.args         = os.args
 sandbox_os.argv         = os.argv
 sandbox_os.mtime        = os.mtime
 sandbox_os.raise        = os.raise
@@ -76,9 +77,9 @@ sandbox_os.SYSERR_NOT_PERM    = os.SYSERR_NOT_PERM
 sandbox_os.SYSERR_NOT_FILEDIR = os.SYSERR_NOT_FILEDIR
 
 -- copy file or directory
-function sandbox_os.cp(srcpath, dstpath)
+function sandbox_os.cp(srcpath, dstpath, opt)
     assert(srcpath and dstpath)
-    local ok, errors = os.cp(vformat(srcpath), vformat(dstpath))
+    local ok, errors = os.cp(vformat(srcpath), vformat(dstpath), opt)
     if not ok then
         os.raise(errors)
     end
@@ -112,19 +113,19 @@ function sandbox_os.ln(srcpath, dstpath)
 end
 
 -- copy file or directory with the verbose info
-function sandbox_os.vcp(srcpath, dstpath)
+function sandbox_os.vcp(srcpath, dstpath, opt)
     assert(srcpath and dstpath)
     if option.get("verbose") then
-        utils.cprint("${dim}> copy %s to %s ..", srcpath, dstpath)
+        utils.cprint("${dim}> copy %s to %s", srcpath, dstpath)
     end
-    return sandbox_os.cp(srcpath, dstpath)
+    return sandbox_os.cp(srcpath, dstpath, opt)
 end 
 
 -- move file or directory with the verbose info
 function sandbox_os.vmv(srcpath, dstpath)
     assert(srcpath and dstpath)
     if option.get("verbose") then
-        utils.cprint("${dim}> move %s to %s ..", srcpath, dstpath)
+        utils.cprint("${dim}> move %s to %s", srcpath, dstpath)
     end
     return sandbox_os.mv(srcpath, dstpath)
 end 
@@ -279,7 +280,9 @@ function sandbox_os.vrunv(program, argv, opt)
     end
 
     -- run it
-    (option.get("verbose") and sandbox_os.execv or sandbox_os.runv)(program, argv, opt)
+    if not (opt and opt.dryrun) then
+        (option.get("verbose") and sandbox_os.execv or sandbox_os.runv)(program, argv, opt)
+    end
 end
 
 -- run command and return output and error data
@@ -409,7 +412,11 @@ function sandbox_os.vexecv(program, argv, opt)
     end
 
     -- run it
-    return sandbox_os.execv(program, argv, opt)
+    if not (opt and opt.dryrun) then
+        return sandbox_os.execv(program, argv, opt)
+    else
+        return 0
+    end
 end
 
 -- match files or directories

@@ -27,10 +27,10 @@ import("core.project.config")
 function main(target, opt)
 
     -- get target apk path
-    local target_apk = path.join(path.directory(target:targetfile()), target:basename() .. ".apk")
+    local target_apk = path.join(target:targetdir(), target:basename() .. ".apk")
 
     -- trace progress info
-    cprintf("${color.build.progress}" .. theme.get("text.build.progress_format") .. ":${clear} ", opt.progress.stop)
+    cprintf("${color.build.progress}" .. theme.get("text.build.progress_format") .. ":${clear} ", opt.progress)
     if option.get("verbose") then
         cprint("${dim color.build.target}generating.qt.app %s.apk", target:basename())
     else
@@ -79,13 +79,15 @@ function main(target, opt)
     -- get the target architecture
     local target_archs = 
     {
-        ["armv5te"]     = "armeabi"
-    ,   ["armv7-a"]     = "armeabi-v7a"
+        ["armv5te"]     = "armeabi"       -- deprecated
+    ,   ["armv7-a"]     = "armeabi-v7a"   -- deprecated
+    ,   ["armeabi"]     = "armeabi"
+    ,   ["armeabi-v7a"] = "armeabi-v7a"
     ,   ["arm64-v8a"]   = "arm64-v8a"
     ,   i386            = "x86"
     ,   x86_64          = "x86_64"
-    ,   mips            = "mips"
-    ,   mips64          = "mips64"
+    ,   mips            = "mips"          -- removed in ndk r71
+    ,   mips64          = "mips64"        -- removed in ndk r71
     }
     local target_arch = assert(target_archs[config.arch()], "unsupport target arch(%s)!", config.arch())
 

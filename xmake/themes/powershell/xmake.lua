@@ -65,10 +65,16 @@ theme("powershell")
     set_color("dump.string", "red bright")
     set_color("dump.string_quote", "red")
     set_color("dump.keyword", "blue")
-    set_color("dump.number", "green")
+    set_color("dump.number", "green bright")
     set_color("dump.function", "cyan")
 
     -- menu
     set_color("menu.main.task.name", "cyan bright")
     set_color("menu.option.name", "green bright")
     set_color("menu.usage", "cyan")
+
+    -- interactive mode
+    set_text("interactive.prompt", "xmake>")
+    set_text("interactive.prompt2", "xmake>>")
+    set_color("interactive.prompt", "green")
+    set_color("interactive.prompt2", "green dim")

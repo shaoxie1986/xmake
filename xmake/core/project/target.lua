@@ -326,7 +326,7 @@ end
 
 -- get user private data
 function _instance:data(name)
-    return self._DATA and self._DATA[name] or nil
+    return self._DATA and self._DATA[name]
 end
 
 -- set user private data
@@ -979,8 +979,14 @@ function _instance:sourcefiles()
             deleted = true
         end
 
-        -- match source files
-        local results = os.match(file)
+        -- find source files 
+        local results = os.files(file)
+        if #results == 0 then
+            -- attempt to find source directories if maybe compile it as directory with the custom rules
+            if #self:filerules(file) > 0 then
+                results = os.dirs(file)
+            end
+        end
         if #results == 0 then
             local sourceinfo = (self:get("__sourceinfo_files") or {})[file] or {}
             utils.warning("cannot match %s(%s).%s_files(\"%s\") at %s:%d", self:type(), self:name(), utils.ifelse(deleted, "del", "add"), file, sourceinfo.file or "", sourceinfo.line or -1)
@@ -1268,7 +1274,7 @@ function _instance:dependfile(objectfile)
 
     -- make dependent file
     -- full file name(not base) to avoid name-clash of original file
-    return path.join(self:dependir(), relativedir, path.basename(originfile) .. ".d")
+    return path.join(self:dependir(), relativedir, path.filename(originfile) .. ".d")
 end
 
 -- get the dependent include files
@@ -1426,9 +1432,9 @@ function _instance:script(name, generic)
         -- `@linux|x86_64`
         -- `@macosx,linux`
         -- `android@macosx,linux`
-        -- `android|armv7-a@macosx,linux`
-        -- `android|armv7-a@macosx,linux|x86_64`
-        -- `android|armv7-a@linux|x86_64`
+        -- `android|armeabi-v7a@macosx,linux`
+        -- `android|armeabi-v7a@macosx,linux|x86_64`
+        -- `android|armeabi-v7a@linux|x86_64`
         --
         for _pattern, _script in pairs(script) do
             local hosts = {}

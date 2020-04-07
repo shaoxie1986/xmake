@@ -48,17 +48,31 @@ os.SYSERR_NOT_PERM    = 1
 os.SYSERR_NOT_FILEDIR = 2
 
 -- copy single file or directory
-function os._cp(src, dst)
+function os._cp(src, dst, rootdir)
 
     -- check
     assert(src and dst)
+
+    -- reserve the source directory structure if opt.rootdir is given
+    if rootdir then
+        if not path.is_absolute(src) then
+            src = path.absolute(src)
+        end
+        if not src:startswith(rootdir) then
+            return false, string.format("cannot copy file %s to %s, error: invalid rootdir(%s)", src, dst, rootdir)
+        end
+    end
 
     -- is file?
     if os.isfile(src) then
 
         -- the destination is directory? append the filename
         if os.isdir(dst) or path.islastsep(dst) then
-            dst = path.join(dst, path.filename(src))
+            if rootdir then
+                dst = path.join(dst, path.relative(src, rootdir))
+            else
+                dst = path.join(dst, path.filename(src))
+            end
         end
 
         -- copy file
@@ -70,7 +84,11 @@ function os._cp(src, dst)
 
         -- the destination directory exists? append the filename
         if os.isdir(dst) or path.islastsep(dst) then
-            dst = path.join(dst, path.filename(path.translate(src)))
+            if rootdir then
+                dst = path.join(dst, path.relative(src, rootdir))
+            else
+                dst = path.join(dst, path.filename(path.translate(src)))
+            end
         end
 
         -- copy directory
@@ -207,35 +225,6 @@ function os._match_wildcard_pathes(v)
     return v
 end
 
--- make string from arguments list
-function os.args(argv)
-
-    -- make it
-    local args = nil
-    for _, arg in ipairs(table.wrap(argv)) do
-        arg = arg:trim()
-        if #arg > 0 then
-            arg = arg:gsub("([\"\\])", "\\%1")
-            if arg:find("[%s%(%)]") then
-                if args then
-                    args = args .. " \"" .. arg .. "\""
-                else
-                    args = "\"" .. arg .. "\""
-                end
-            else
-                if args then
-                    args = args .. " " .. arg
-                else
-                    args = arg
-                end
-            end
-        end
-    end
-
-    -- ok?
-    return args or ""
-end
-
 -- match files or directories
 --
 -- @param pattern   the search pattern
@@ -365,21 +354,30 @@ function os.filedirs(pattern, callback)
     return (os.match(pattern, 'a', callback))
 end
 
--- copy files or directories
-function os.cp(srcpath, dstpath)
+-- copy files or directories and we can reserve the source directory structure
+-- e.g. os.cp("src/**.h", "/tmp/", {rootdir = "src"})
+function os.cp(srcpath, dstpath, opt)
 
     -- check arguments
     if not srcpath or not dstpath then
         return false, string.format("invalid arguments!")
     end
 
+    -- reserve the source directory structure if opt.rootdir is given
+    local rootdir = opt and opt.rootdir
+    if rootdir then
+        if not path.is_absolute(rootdir) then
+            rootdir = path.absolute(rootdir)
+        end
+    end
+
     -- copy files or directories
     local srcpathes = os._match_wildcard_pathes(srcpath)
     if type(srcpathes) == "string" then
-        return os._cp(srcpathes, dstpath)
+        return os._cp(srcpathes, dstpath, rootdir)
     else
         for _, _srcpath in ipairs(srcpathes) do
-            local ok, errors = os._cp(_srcpath, dstpath)
+            local ok, errors = os._cp(_srcpath, dstpath, rootdir)
             if not ok then
                 return false, errors
             end

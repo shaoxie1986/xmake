@@ -84,9 +84,6 @@ function _do_link_target(target, opt)
         print(linkinst:linkcmd(objectfiles, targetfile, {linkflags = linkflags, rawargs = true}))
     end
 
-    -- flush io buffer to update progress info
-    io.flush()
-
     -- link it
     if not option.get("dry-run") then
         assert(linkinst:link(objectfiles, targetfile, {linkflags = linkflags}))
@@ -165,5 +162,5 @@ function main(batchjobs, rootjob, target)
     -- unless call set_values("build.across_targets_in_parallel") to disable to build across targets in parallel.
     --
     local job_objects = add_batchjobs_for_object(batchjobs, job_link, target)
-    return target:values("build.across_targets_in_parallel") == false and job_objects or job_link
+    return target:values("build.across_targets_in_parallel") == false and job_objects or job_link, job_objects
 end

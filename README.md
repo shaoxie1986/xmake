@@ -35,7 +35,7 @@
     <a href="https://jq.qq.com/?_wv=1027&k=5hpwWFv">
       <img src="https://img.shields.io/badge/chat-on%20QQ-ff69b4.svg?style=flat-square" alt="QQ" />
     </a>
-    <a href="http://xmake.io/pages/donation.html#donate">
+    <a href="https://xmake.io/#/sponsor">
       <img src="https://img.shields.io/badge/donate-us-orange.svg?style=flat-square" alt="Donate" />
     </a>
   </div>
@@ -159,7 +159,7 @@ The test project: [xmake-core](https://github.com/xmake-io/xmake/tree/master/cor
 * Windows (x86, x64)
 * macOS (i386, x86_64)
 * Linux (i386, x86_64, cross-toolchains ..)
-* Android (i386, x86_64, armv5te, armv7-a, armv8-a, arm64-v8a, mips)
+* Android (x86, x86_64, armeabi, armeabi-v7a, arm64-v8a)
 * iOS (armv7, armv7s, arm64, i386, x86_64)
 * WatchOS (armv7k, i386)
 * MSYS (i386, x86_64)
