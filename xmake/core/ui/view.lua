@@ -11,20 +11,22 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        view.lua
 --
 
 -- load modules
+local table  = require("base/table")
 local log    = require("ui/log")
 local rect   = require("ui/rect")
 local point  = require("ui/point")
 local object = require("ui/object")
 local canvas = require("ui/canvas")
 local curses = require("ui/curses")
+local action = require("ui/action")
 
 -- define module
 local view = view or object()
@@ -58,14 +60,15 @@ function view:init(name, bounds)
     state.block_cursor   = false     -- block cursor
     state.selected       = false     -- is selected?
     state.focused        = false     -- is focused?
-    state.redraw         = true      -- need redraw 
-    state.refresh        = true      -- need refresh
-    state.resize         = true      -- need resize
+    state.redraw         = true      -- need redraw
+    state.on_refresh     = true      -- need refresh
+    state.on_resize      = true      -- need resize
     self._STATE          = state
 
     -- init options
     local options        = object()
     options.selectable   = false     -- true if window can be selected
+    options.mouseable    = false     -- false by default
     self._OPTIONS        = options
 
     -- init attributes
@@ -91,8 +94,8 @@ end
 function view:exit()
 
     -- close window
-    if self:window() then
-        self:window():close()
+    if self._WINDOW then
+        self._WINDOW:close()
         self._WINDOW = nil
     end
 end
@@ -110,7 +113,7 @@ end
 -- set window bounds
 function view:bounds_set(bounds)
     if bounds and self:bounds() ~= bounds then
-        self._BOUNDS = bounds() 
+        self._BOUNDS = bounds()
         self:invalidate(true)
     end
 end
@@ -140,7 +143,7 @@ function view:parent_set(parent)
     self._PARENT = parent
 end
 
--- get the application 
+-- get the application
 function view:application()
     if not self._APPLICATION then
         local app = self
@@ -154,6 +157,15 @@ end
 
 -- get the view window
 function view:window()
+    if not self._WINDOW then
+
+        -- create window
+        self._WINDOW = curses.new_pad(self:height() > 0 and self:height() or 1, self:width() > 0 and self:width() or 1)
+        assert(self._WINDOW, "cannot create window!")
+
+        -- disable cursor
+        self._WINDOW:leaveok(true)
+    end
     return self._WINDOW
 end
 
@@ -166,10 +178,10 @@ function view:canvas()
 end
 
 -- draw view
-function view:draw(transparent)
+function view:on_draw(transparent)
 
     -- trace
-    log:print("%s: draw ..", self)
+    log:print("%s: draw (transparent: %s) ..", self, tostring(transparent))
 
     -- draw background
     if not transparent then
@@ -188,7 +200,7 @@ function view:draw(transparent)
 end
 
 -- refresh view
-function view:refresh()
+function view:on_refresh()
 
     -- refresh to the parent view
     local parent = self:parent()
@@ -209,34 +221,30 @@ function view:refresh()
 end
 
 -- resize bounds of inner child views (abstract)
-function view:resize()
+function view:on_resize()
 
     -- trace
     log:print("%s: resize ..", self)
 
     -- close the previous windows first
-    if self:window() then
-        self:window():close()
+    if self._WINDOW then
+        self._WINDOW:close()
         self._WINDOW = nil
     end
 
     -- need renew canvas
     self._CANVAS = nil
 
-    -- create a new window
-    self._WINDOW = curses.new_pad(self:height() > 0 and self:height() or 1, self:width() > 0 and self:width() or 1)
-    assert(self._WINDOW, "cannot create window!")
-
-    -- disable cursor
-    self:window():leaveok(true)
-
     -- clear mark
     self:state_set("resize", false)
+
+    -- do action
+    self:action_on(action.ac_on_resized)
 end
 
 -- show view?
--- 
--- e.g.
+--
+-- .e.g
 -- v:show(false)
 -- v:show(true, {focused = true})
 --
@@ -262,10 +270,10 @@ function view:invalidate(bounds)
 end
 
 -- on event (abstract)
--- 
+--
 -- @return true: done and break dispatching, false/nil: continous to dispatch to other views
 --
-function view:event_on(e)
+function view:on_event(e)
 end
 
 -- get the current event
@@ -274,8 +282,8 @@ function view:event()
 end
 
 -- put an event to view
-function view:event_put(e)
-    return self:parent() and self:parent():event_put(e)
+function view:put_event(e)
+    return self:parent() and self:parent():put_event(e)
 end
 
 -- get type
@@ -319,7 +327,7 @@ function view:option_set(name, enable)
     -- state is not changed?
     enable = enable or false
     if self:option(name) == enable then
-        return 
+        return
     end
 
     -- set option
@@ -349,20 +357,21 @@ function view:extra_set(name, value)
     return self
 end
 
--- get action
-function view:action(name)
-    return self._ACTIONS[name]
-end
-
 -- set action
 function view:action_set(name, on_action)
     self._ACTIONS[name] = on_action
     return self
 end
 
+-- add action
+function view:action_add(name, on_action)
+    self._ACTIONS[name] = table.join(table.wrap(self._ACTIONS[name]), on_action)
+    return self
+end
+
 -- do action
 function view:action_on(name, ...)
-    local on_action = self:action(name)
+    local on_action = self._ACTIONS[name]
     if on_action then
         if type(on_action) == "string" then
             -- send command
@@ -372,6 +381,13 @@ function view:action_on(name, ...)
         elseif type(on_action) == "function" then
             -- do action script
             return on_action(self, ...)
+        elseif type(on_action) == "table" then
+            for _, on_action_val in ipairs(on_action) do
+                -- we cannot uses the return value of action for multi-actions
+                if type(on_action_val) == "function" then
+                    on_action_val(self, ...)
+                end
+            end
         end
     end
 end
@@ -404,7 +420,7 @@ function view:background()
     return background
 end
 
--- set background, e.g. background_set("blue")
+-- set background, .e.g background_set("blue")
 function view:background_set(color)
     return self:attr_set("background", color)
 end
@@ -427,6 +443,11 @@ function view:_mark_resize()
 
     -- need resize it
     self:state_set("resize", true)
+
+    -- @note we need trigger on_resize() of the root view and pass it to this subview
+    if self:parent() then
+        self:parent():invalidate(true)
+    end
 end
 
 -- need redraw view
@@ -462,7 +483,7 @@ function view:_mark_refresh()
         self:state_set("refresh", true)
     end
 
-    -- need refresh it's parent view 
+    -- need refresh it's parent view
     if self:parent() then
         self:parent():_mark_refresh()
     end

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        scheduler.lua
@@ -31,7 +31,7 @@ sandbox_core_base_scheduler.OT_SOCK = poller.OT_SOCK
 sandbox_core_base_scheduler.OT_PIPE = poller.OT_PIPE
 sandbox_core_base_scheduler.OT_PROC = poller.OT_PROC
 
--- start a new coroutine task 
+-- start a new coroutine task
 function sandbox_core_base_scheduler.co_start(cotask, ...)
     local co, errors = scheduler:co_start(cotask, ...)
     if not co then
@@ -40,9 +40,18 @@ function sandbox_core_base_scheduler.co_start(cotask, ...)
     return co
 end
 
--- start a new named coroutine task 
+-- start a new named coroutine task
 function sandbox_core_base_scheduler.co_start_named(coname, cotask, ...)
     local co, errors = scheduler:co_start_named(coname, cotask, ...)
+    if not co then
+        raise(errors)
+    end
+    return co
+end
+
+-- start a new coroutine task with options
+function sandbox_core_base_scheduler.co_start_withopt(opt, cotask, ...)
+    local co, errors = scheduler:co_start_withopt(opt, cotask, ...)
     if not co then
         raise(errors)
     end
@@ -101,7 +110,7 @@ function sandbox_core_base_scheduler.co_group_waitobjs(name)
     return scheduler:co_group_waitobjs(name)
 end
 
--- get the current running coroutine 
+-- get the current running coroutine
 function sandbox_core_base_scheduler.co_running()
     return scheduler:co_running()
 end

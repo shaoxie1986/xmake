@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        textedit.lua
@@ -26,6 +26,8 @@ local event     = require("ui/event")
 local border    = require("ui/border")
 local curses    = require("ui/curses")
 local textarea  = require("ui/textarea")
+local action    = require("ui/action")
+local bit       = require("bit")
 
 -- define module
 local textedit = textedit or textarea()
@@ -42,18 +44,19 @@ function textedit:init(name, bounds, text)
     -- mark as selectable
     self:option_set("selectable", true)
 
-    -- disable progress
-    self:option_set("progress", false)
+    -- mark as mouseable
+    self:option_set("mouseable", true)
+    self:action_set(action.ac_on_clicked, function () return true end)
 
     -- enable multiple line
     self:option_set("multiline", true)
 end
 
 -- draw textedit
-function textedit:draw(transparent)
+function textedit:on_draw(transparent)
 
     -- draw label
-    textarea.draw(self, transparent)
+    textarea.on_draw(self, transparent)
 
     -- move cursor
     if not self:text() or #self:text() == 0 then
@@ -71,20 +74,22 @@ function textedit:text_set(text)
 end
 
 -- on event
-function textedit:event_on(e)
+function textedit:on_event(e)
 
     -- update text
     if e.type == event.ev_keyboard then
-        if e.key_code > 0x1f and e.key_code < 0x7f then
-            self:text_set(self:text() .. e.key_name)
-            return true
-        elseif e.key_name == "Enter" and self:option("multiline") then
+        if e.key_name == "Enter" and self:option("multiline") then
             self:text_set(self:text() .. '\n')
             return true
         elseif e.key_name == "Backspace" then
             local text = self:text()
             if #text > 0 then
-                self:text_set(text:sub(1, #text - 1))
+                local size = 1
+                -- while continuation byte
+                while bit.band(text:byte(#text - size + 1), 0xc0) == 0x80 do
+                    size = size + 1
+                end
+                self:text_set(text:sub(1, #text - size))
             end
             return true
         elseif e.key_name == "CtrlV" then
@@ -93,11 +98,14 @@ function textedit:event_on(e)
                 self:text_set(self:text() .. pastetext)
             end
             return true
+        elseif e.key_code > 0x1f and e.key_code < 0xf8 then
+            self:text_set(self:text() .. string.char(e.key_code))
+            return true
         end
     end
 
     -- do textarea event
-    return textarea.event_on(self, e) 
+    return textarea.on_event(self, e)
 end
 
 -- return module

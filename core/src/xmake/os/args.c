@@ -11,8 +11,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ *
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        args.c
@@ -33,48 +33,40 @@
 /* //////////////////////////////////////////////////////////////////////////////////////
  * private implementation
  */
-static tb_void_t tb_os_args_append(tb_string_ref_t result, tb_char_t const* cstr, tb_size_t size, tb_bool_t escape)
+static tb_void_t tb_os_args_append(tb_string_ref_t result, tb_char_t const* cstr, tb_size_t size, tb_bool_t escape, tb_bool_t nowrap)
 {
     // check
     tb_assert_and_check_return(size < TB_PATH_MAXN);
 
-    // wrap and escape characters
+    // need wrap quote?
     tb_char_t ch;
-    tb_size_t n = 0;
     tb_char_t const* p = cstr;
     tb_bool_t wrap_quote = tb_false;
-    tb_char_t buff[TB_PATH_MAXN];
-    tb_size_t m = tb_arrayn(buff);
-    while ((ch = *p) && n < m)
+    if (!nowrap)
+    {
+        while ((ch = *p))
+        {
+            if (ch == ' ' || ch == '(' || ch == ')') wrap_quote = tb_true;
+            p++;
+        }
+    }
+
+    // wrap begin quote
+    if (wrap_quote) tb_string_chrcat(result, '\"');
+
+    // escape characters
+    p = cstr;
+    while ((ch = *p))
     {
         // escape '"' or '\\'
-        if (ch == '\"' || (escape && ch == '\\'))
-        {
-            if (n < m) buff[n++] = '\\';
-        }
-        else if (ch == ' ' || ch == '(' || ch == ')') wrap_quote = tb_true;
-        if (n < m) buff[n++] = ch;
+        if (ch == '\"' || ((escape || wrap_quote) && ch == '\\'))
+            tb_string_chrcat(result, '\\');
+        tb_string_chrcat(result, ch);
         p++;
     }
-    tb_assert_and_check_return(n < m);
-    buff[n] = '\0';
 
-    // wrap "" if exists escape characters and spaces?
-    if (wrap_quote) 
-    {
-        tb_string_chrcat(result, '\"');
-        tb_size_t i = 0;
-        tb_char_t ch;
-        for (i = 0; i < n; i++)
-        {
-            ch = buff[i];
-            if (ch == '\\') // escape the '\\' characters in ""
-                tb_string_chrcat(result, '\\');
-            tb_string_chrcat(result, ch);
-        }
-        tb_string_chrcat(result, '\"');
-    }
-    else if (n) tb_string_cstrncat(result, buff, n);
+    // wrap end quote
+    if (wrap_quote) tb_string_chrcat(result, '\"');
 }
 
 /* //////////////////////////////////////////////////////////////////////////////////////
@@ -88,12 +80,23 @@ tb_int_t xm_os_args(lua_State* lua)
 
     // escape '\\' characters in global?
     tb_bool_t escape = tb_false;
-    if (lua_istable(lua, 2)) 
-    { 
-        // is detached?
+    if (lua_istable(lua, 2))
+    {
+        // is escape?
         lua_pushstring(lua, "escape");
         lua_gettable(lua, 2);
         escape = lua_toboolean(lua, -1);
+        lua_pop(lua, 1);
+    }
+
+    // disable to wrap quote characters in global?
+    tb_bool_t nowrap = tb_false;
+    if (lua_istable(lua, 2))
+    {
+        // is nowrap?
+        lua_pushstring(lua, "nowrap");
+        lua_gettable(lua, 2);
+        nowrap = lua_toboolean(lua, -1);
         lua_pop(lua, 1);
     }
 
@@ -108,7 +111,7 @@ tb_int_t xm_os_args(lua_State* lua)
         tb_size_t n = lua_objlen(lua, 1);
         for (i = 1; i <= n; i++)
         {
-            // add space 
+            // add space
             if (i != 1) tb_string_chrcat(&result, ' ');
 
             // add argument
@@ -117,7 +120,7 @@ tb_int_t xm_os_args(lua_State* lua)
             size_t size = 0;
             tb_char_t const* cstr = luaL_checklstring(lua, -1, &size);
             if (cstr && size)
-                tb_os_args_append(&result, cstr, size, escape);
+                tb_os_args_append(&result, cstr, size, escape, nowrap);
             lua_pop(lua, 1);
         }
     }
@@ -126,7 +129,7 @@ tb_int_t xm_os_args(lua_State* lua)
         size_t size = 0;
         tb_char_t const* cstr = luaL_checklstring(lua, 1, &size);
         if (cstr && size)
-            tb_os_args_append(&result, cstr, size, escape);
+            tb_os_args_append(&result, cstr, size, escape, nowrap);
     }
 
     // return result

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        features.lua
@@ -26,19 +26,19 @@ import("cxxfeatures")
 function _get_macro_defines(snippets, extension, opt)
 
     -- make an stub source file
-    local sourcefile = path.join(os.tmpdir(), "detect", "cl_features" .. extension)
+    local sourcefile = os.tmpfile() .. extension
     local objectfile = sourcefile .. ".obj"
     local binaryfile = sourcefile .. ".exe"
     io.writefile(sourcefile, "#include <stdio.h>\n\nint main(int argc, char** argv)\n{\n" .. table.concat(table.wrap(snippets), "\n") .. "\nreturn 0;\n}\n")
 
     -- get defines
     local results = {}
-    local defines = try 
+    local defines = try
     {
-        function () 
-            os.runv(opt.program, table.join(opt.flags or {}, {"-nologo", "-Fo" .. objectfile, sourcefile, "-link", "-out:" .. binaryfile}))
-            return os.iorunv(binaryfile)
-        end 
+        function ()
+            os.runv(opt.program, table.join(opt.flags or {}, {"-nologo", "-Fo" .. objectfile, sourcefile, "-link", "-out:" .. binaryfile}), {envs = opt.envs})
+            return os.iorunv(binaryfile, {}, {envs = opt.envs})
+        end
     }
     if defines then
         for _, define in ipairs(defines:split("\n")) do
@@ -50,8 +50,6 @@ function _get_macro_defines(snippets, extension, opt)
     os.tryrm(sourcefile)
     os.tryrm(objectfile)
     os.tryrm(binaryfile)
-
-    -- ok?
     return results
 end
 
@@ -97,6 +95,7 @@ end
 function check_features(opt)
 
     -- check features with all extensions
+    opt = opt or {}
     local results = {}
     for extension, features in pairs(_g.features) do
 
@@ -121,8 +120,8 @@ function check_features(opt)
     return results
 end
 
--- get features 
--- 
+-- get features
+--
 -- @param opt   the argument options, e.g. {toolname = "", program = "", programver = "", flags = {}}
 --
 -- @return      the features

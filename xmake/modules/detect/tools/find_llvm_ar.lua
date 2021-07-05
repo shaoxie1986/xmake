@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_llvm_ar.lua
@@ -42,11 +42,11 @@ function main(opt)
     opt = opt or {}
     opt.check = opt.check or "-version"
     opt.command = opt.command or "-version"
-    
+
     -- find program
     local program = find_program(opt.program or "llvm-ar", opt)
 
-    -- find program version 
+    -- find program version
     local version = nil
     if program and opt.version then
         version = find_programver(program, opt)

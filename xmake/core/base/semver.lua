@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        semver.lua
@@ -32,7 +32,7 @@ function _instance:get(name)
     -- get it from info first
     local value = self._INFO[name]
     if value ~= nil then
-        return value 
+        return value
     end
 end
 
@@ -80,12 +80,37 @@ end
 
 -- satisfies the given semantic version(e.g. '> 1.0 < 2.0', '~1.5')?
 function _instance:satisfies(version)
-    return semver.satisfies(self:rawstr(), version) 
+    return semver.satisfies(self:rawstr(), version)
 end
 
 -- is in the given version range, [version1, version2]?
 function _instance:at(version1, version2)
     return self:ge(version1) and self:le(version2)
+end
+
+-- add string compatible interface, string.sub
+function _instance:sub(...)
+    return self:rawstr():sub(...)
+end
+
+-- add string compatible interface, string.gsub
+function _instance:gsub(...)
+    return self:rawstr():gsub(...)
+end
+
+-- add string compatible interface, string.split
+function _instance:split(...)
+    return self:rawstr():split(...)
+end
+
+-- add string compatible interface, string.startswith
+function _instance:startswith(...)
+    return self:rawstr():startswith(...)
+end
+
+-- add string compatible interface, string.endswith
+function _instance:endswith(...)
+    return self:rawstr():endswith(...)
 end
 
 -- v1 == v2 (str/ver)?
@@ -143,6 +168,17 @@ end
 -- get the raw version string
 function _instance:__tostring()
     return self:rawstr()
+end
+
+-- add string compatible interface, e.g. version .. str
+function _instance.__concat(op1, op2)
+    if type(op1) == "string" then
+        return op1 .. op2:rawstr()
+    elseif type(op2) == "string" then
+        return op1:rawstr() .. op2
+    else
+        return op1:rawstr() .. op2:rawstr()
+    end
 end
 
 -- new an instance

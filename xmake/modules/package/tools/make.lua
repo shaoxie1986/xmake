@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        make.lua
@@ -64,6 +64,10 @@ function buildenvs(package)
         if os.isdir(pkgconfig) then
             table.insert(PKG_CONFIG_PATH, pkgconfig)
         end
+        pkgconfig = path.join(dep:installdir(), "share", "pkgconfig")
+        if os.isdir(pkgconfig) then
+            table.insert(PKG_CONFIG_PATH, pkgconfig)
+        end
         local aclocal = path.join(dep:installdir(), "share", "aclocal")
         if os.isdir(aclocal) then
             table.insert(ACLOCAL_PATH, aclocal)
@@ -74,14 +78,14 @@ function buildenvs(package)
     return envs
 end
 
--- build package 
+-- build package
 function build(package, configs, opt)
 
     -- init options
     opt = opt or {}
 
     -- pass configurations
-    local njob = tostring(math.ceil(os.cpuinfo().ncpu * 3 / 2))
+    local njob = opt.jobs or option.get("jobs") or tostring(math.ceil(os.cpuinfo().ncpu * 3 / 2))
     local argv = {"-j" .. njob}
     if option.get("verbose") then
         table.insert(argv, "VERBOSE=1")
@@ -97,6 +101,29 @@ function build(package, configs, opt)
         end
     end
 
-    -- do configure
-    os.vrunv("make", argv, {envs = opt.envs or buildenvs(package)})
+    -- do build
+    if is_host("bsd") then
+        os.vrunv("gmake", argv, {envs = opt.envs or buildenvs(package)})
+    else
+        os.vrunv("make", argv, {envs = opt.envs or buildenvs(package)})
+    end
+end
+
+-- install package
+function install(package, configs, opt)
+
+    -- do build
+    opt = opt or {}
+    build(package, configs, opt)
+
+    -- do install
+    local argv = {"install"}
+    if option.get("verbose") then
+        table.insert(argv, "VERBOSE=1")
+    end
+    if is_host("bsd") then
+        os.vrunv("gmake", argv, {envs = opt.envs or buildenvs(package)})
+    else
+        os.vrunv("make", argv, {envs = opt.envs or buildenvs(package)})
+    end
 end

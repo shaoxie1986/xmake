@@ -1,9 +1,9 @@
 ; xmake.nsi
 ;
 ; This script is perhaps one of the simplest NSIs you can make. All of the
-; optional settings are left to their default settings. The installer simply 
+; optional settings are left to their default settings. The installer simply
 ; prompts the user asking them where to install, and drops a copy of xmake.nsi
-; there. 
+; there.
 
 ;--------------------------------
 ; includes
@@ -100,10 +100,13 @@ ManifestDPIAware true
     MessageBox mb_IconStop|mb_TopMost|mb_SetForeground "Unable to elevate, error $0"
     Quit
   ${EndSwitch}
-  
+
+  ; The UAC plugin changes the error level even in the inner process, reset it.
+  ; note fix install exit code 1223 to 0 with slient /S
+  SetErrorLevel 0
   SetShellVarContext all
 !macroend
- 
+
 ;--------------------------------
 ; Install Pages
 
@@ -125,7 +128,7 @@ ManifestDPIAware true
 
 ;--------------------------------
 ; Languages
- 
+
 !insertmacro MUI_LANGUAGE "English"
 
 ;--------------------------------
@@ -137,7 +140,7 @@ VIFileVersion                            ${VERSION}.0
 VIAddVersionKey /LANG=0 ProductName      XMake
 VIAddVersionKey /LANG=0 Comments         "A cross-platform build utility based on Lua$\nwebsite: https://xmake.io"
 VIAddVersionKey /LANG=0 CompanyName      "The TBOOX Open Source Group"
-VIAddVersionKey /LANG=0 LegalCopyright   "Copyright (C) 2015-2020 Ruki Wang, tboox.org, xmake.io$\nCopyright (C) 2005-2015 Mike Pall, luajit.org"
+VIAddVersionKey /LANG=0 LegalCopyright   "Copyright (C) 2015-present Ruki Wang, tboox.org, xmake.io"
 VIAddVersionKey /LANG=0 FileDescription  "XMake Installer - v${VERSION}"
 VIAddVersionKey /LANG=0 OriginalFilename "xmake-${ARCH}.exe"
 VIAddVersionKey /LANG=0 FileVersion      ${VERSION_FULL}
@@ -145,7 +148,7 @@ VIAddVersionKey /LANG=0 ProductVersion   ${VERSION_FULL}
 
 
 ;--------------------------------
-; Reg pathes
+; Reg paths
 
 !define RegUninstall "Software\Microsoft\Windows\CurrentVersion\Uninstall\XMake"
 
@@ -156,7 +159,7 @@ Var NOADMIN
 Function TrimQuote
 	Exch $R1 ; Original string
 	Push $R2
- 
+
 Loop:
 	StrCpy $R2 "$R1" 1
 	StrCmp "$R2" "'"   TrimLeft
@@ -166,10 +169,10 @@ Loop:
 	StrCmp "$R2" "$\t" TrimLeft
 	StrCmp "$R2" " "   TrimLeft
 	GoTo Loop2
-TrimLeft:	
+TrimLeft:
 	StrCpy $R1 "$R1" "" 1
 	Goto Loop
- 
+
 Loop2:
 	StrCpy $R2 "$R1" 1 -1
 	StrCmp "$R2" "'"   TrimRight
@@ -179,10 +182,10 @@ Loop2:
 	StrCmp "$R2" "$\t" TrimRight
 	StrCmp "$R2" " "   TrimRight
 	GoTo Done
-TrimRight:	
+TrimRight:
 	StrCpy $R1 "$R1" -1
 	Goto Loop2
- 
+
 Done:
 	Pop $R2
 	Exch $R1
@@ -222,17 +225,19 @@ FunctionEnd
 Section "XMake (required)" InstallExeutable
 
   SectionIn RO
-  
+
   ; Set output path to the installation directory.
   SetOutPath $InstDir
 
   ; Remove previous directories used
   RMDir /r "$InstDir"
-  
+
   ; Put file there
   File /r /x ".DS_Store" /x "*.swp" "..\xmake\*.*"
   File "..\*.md"
   File "..\core\build\xmake.exe"
+  File "..\scripts\xrepo.bat"
+  File "..\scripts\xrepo.ps1"
   File /r /x ".DS_Store" "..\winenv"
 
   WriteUninstaller "uninstall.exe"
@@ -241,7 +246,7 @@ Section "XMake (required)" InstallExeutable
 
     ; Write uac info
     WriteRegStr   ${RootKey} ${RegUninstall} "NoAdmin"               "$NOADMIN"
-    
+
     ; Write the uninstall keys for Windows
     WriteRegStr   ${RootKey} ${RegUninstall} "DisplayName"           "XMake build utility"
     WriteRegStr   ${RootKey} ${RegUninstall} "DisplayIcon"           '"$InstDir\xmake.exe"'
@@ -270,7 +275,7 @@ Section "XMake (required)" InstallExeutable
   ${Else}
     !insertmacro AddReg ${HKCU}
   ${EndIf}
-  
+
 SectionEnd
 
 Section "Add to PATH" InstallPath
@@ -315,7 +320,7 @@ Function un.onInit
   ReadRegStr $NOADMIN ${HKLM} ${RegUninstall} "NoAdmin"
   IfErrors 0 +2
   ReadRegStr $NOADMIN ${HKCU} ${RegUninstall} "NoAdmin"
-  
+
   ${IfNot} $NOADMIN == "true"
     !insertmacro Init "uninstaller"
   ${EndIf}

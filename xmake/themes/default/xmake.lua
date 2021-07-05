@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -21,15 +21,15 @@
 -- define theme
 theme("default")
 
-    -- the success status 
+    -- the success status
     set_text("success", "$ok")
     set_color("success", "green bright")
 
-    -- the failure status 
+    -- the failure status
     set_text("failure", "$failed")
     set_color("failure", "red bright")
 
-    -- the nothing status 
+    -- the nothing status
     set_text("nothing", "$no")
     set_color("nothing", "red bright")
 
@@ -43,13 +43,25 @@ theme("default")
 
     -- the building progress
     set_text("build.progress_format", "[%3d%%]")
+    set_text("build.progress_style", "scroll")
     set_color("build.progress", "green bright")
 
     -- the building object file
     set_color("build.object", "")
 
     -- the building target file
-    set_color("build.target", "magenta bright")
+    if is_subhost("windows") and (os.term() == "powershell" or os.term() == "pwsh") then
+        set_color("build.target", "cyan bright")
+    else
+        set_color("build.target", "magenta bright")
+    end
+
+    -- the spinner chars
+    if (is_subhost("windows") and winos.version():lt("win10")) or is_subhost("msys", "cygwin") then
+        set_text("spinner.chars", '\\', '-', '/', '|')
+    else
+        set_text("spinner.chars", '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
+    end
 
     -- color dump
     set_text("dump.default_format", "%s")
@@ -62,15 +74,25 @@ theme("default")
     set_color("dump.default", "red")
     set_color("dump.udata", "yellow")
     set_color("dump.table", "bright")
-    set_color("dump.string", "magenta bright")
-    set_color("dump.string_quote", "magenta")
+    if is_subhost("windows") and (os.term() == "powershell" or os.term() == "pwsh") then
+        set_color("dump.string", "red bright")
+        set_color("dump.string_quote", "red")
+    else
+        set_color("dump.string", "magenta bright")
+        set_color("dump.string_quote", "magenta")
+    end
     set_color("dump.keyword", "blue")
     set_color("dump.number", "green bright")
     set_color("dump.function", "cyan")
 
     -- menu
-    set_color("menu.main.task.name", "magenta")
-    set_color("menu.option.name", "green")
+    if is_subhost("windows") and (os.term() == "powershell" or os.term() == "pwsh") then
+        set_color("menu.main.task.name", "cyan bright")
+        set_color("menu.option.name", "green bright")
+    else
+        set_color("menu.main.task.name", "magenta")
+        set_color("menu.option.name", "green")
+    end
     set_color("menu.usage", "cyan")
 
     -- interactive mode

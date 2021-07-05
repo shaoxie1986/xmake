@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        config.lua
@@ -29,36 +29,8 @@ local table         = require("base/table")
 local utils         = require("base/utils")
 local option        = require("base/option")
 
--- load the project configure
-function config._load(targetname)
-
-    -- check
-    targetname = targetname or "all"
-
-    -- load configure from the file first
-    local filepath = config.filepath()
-    if os.isfile(filepath) then
-
-        -- load it 
-        local results, errors = io.load(filepath)
-        if not results then
-            return nil, errors
-        end
-
-        -- load the target configure 
-        if results._TARGETS then
-            return table.wrap(results._TARGETS[targetname])
-        end
-    end
-
-    -- empty
-    return {}
-end
-
--- get the current given configure
+-- get the current given configuration
 function config.get(name)
-
-    -- get it 
     local value = nil
     if config._CONFIGS then
         value = config._CONFIGS[name]
@@ -66,8 +38,6 @@ function config.get(name)
             value = nil
         end
     end
-
-    -- get it
     return value
 end
 
@@ -76,7 +46,7 @@ function config.readonly(name)
     return config._MODES and config._MODES["__readonly_" .. name]
 end
 
--- set the given configure to the current 
+-- set the given configure to the current
 --
 -- @param name  the name
 -- @param value the value
@@ -93,7 +63,7 @@ function config.set(name, value, opt)
     -- check readonly
     assert(opt.force or not config.readonly(name), "cannot set readonly config: " .. name)
 
-    -- set it 
+    -- set it
     config._CONFIGS = config._CONFIGS or {}
     config._CONFIGS[name] = value
 
@@ -107,116 +77,112 @@ end
 -- get all options
 function config.options()
 
-    -- check
-    assert(config._CONFIGS)
-         
     -- remove values with "auto" and private item
     local configs = {}
-    for name, value in pairs(config._CONFIGS) do
-        if not name:find("^_%u+") and (type(value) ~= "string" or value ~= "auto") then
-            configs[name] = value
+    if config._CONFIGS then
+        for name, value in pairs(config._CONFIGS) do
+            if not name:find("^_%u+") and (type(value) ~= "string" or value ~= "auto") then
+                configs[name] = value
+            end
         end
     end
-
-    -- get it
     return configs
 end
 
--- get the buildir 
+-- get the buildir
 function config.buildir()
-    
-    -- get it 
-    local buildir = config.get("buildir")
-    if buildir then
 
-        -- get the absolute path first
-        if not path.is_absolute(buildir) then
-            buildir = path.absolute(buildir, os.projectdir())
+    -- get the absolute path first
+    local buildir = config.get("buildir") or "build"
+    if not path.is_absolute(buildir) then
+        local rootdir
+        if os.isdir(path.join(os.workingdir(), ".xmake")) then
+            -- we switch to independent working directory @see https://github.com/xmake-io/xmake/issues/820
+            rootdir = os.workingdir()
+        else
+            rootdir = os.projectdir()
         end
-
-        -- adjust path for the current directory
-        buildir = path.relative(buildir, os.curdir())
+        buildir = path.absolute(buildir, rootdir)
     end
+
+    -- adjust path for the current directory
+    buildir = path.relative(buildir, os.curdir())
     return buildir
 end
 
 -- get the configure file
 function config.filepath()
-    return path.join(config.directory(), "xmake.conf")
+    return path.join(config.directory(), xmake._NAME .. ".conf")
+end
+
+-- get the local cache directory
+function config.cachedir()
+    return path.join(config.directory(), "cache")
 end
 
 -- get the configure directory on the current host/arch platform
 function config.directory()
     if config._DIRECTORY == nil then
-        local rootdir = os.getenv("XMAKE_CONFIGDIR") or os.projectdir()
-        config._DIRECTORY = path.join(rootdir, ".xmake", os.host(), os.arch())
+        local rootdir = os.getenv("XMAKE_CONFIGDIR")
+        if not rootdir and os.isdir(path.join(os.workingdir(), ".xmake")) then
+            -- we switch to independent working directory @see https://github.com/xmake-io/xmake/issues/820
+            rootdir = os.workingdir()
+        end
+        if not rootdir then
+            rootdir = os.projectdir()
+        end
+        config._DIRECTORY = path.join(rootdir, "." .. xmake._NAME, os.host(), os.arch())
     end
     return config._DIRECTORY
 end
 
--- load the project configure
-function config.load(targetname)
-
-    -- load configure
-    local results, errors = config._load(targetname)
-    if not results then
-        utils.error(errors)
-        return false
-    end
-
-    -- merge the target configure first
-    local ok = false
-    for name, value in pairs(results) do
-        if config.get(name) == nil then
-            config.set(name, value)
-            ok = true
+-- load the project configuration
+function config.load(filepath)
+    local configs, errors
+    filepath = filepath or config.filepath()
+    if os.isfile(filepath) then
+        configs, errors = io.load(filepath)
+        if not configs then
+            utils.error(errors)
+            return false
         end
     end
-
-    -- ok?
+    -- merge into the current configuration
+    local ok = false
+    if configs then
+        for name, value in pairs(configs) do
+            if config.get(name) == nil then
+                config.set(name, value)
+                ok = true
+            end
+        end
+    end
     return ok
 end
 
--- save the project configure
-function config.save(targetname)
-
-    -- check
-    targetname = targetname or "all"
-
-    -- load the previous results from configure
-    local results = {}
-    local filepath = config.filepath()
-    if os.isfile(filepath) then
-        results = io.load(filepath) or {}
+-- save the project configuration
+function config.save(filepath, opt)
+    opt = opt or {}
+    filepath = filepath or config.filepath()
+    if opt.public then
+        local configs = {}
+        for name, value in pairs(config.options()) do
+            if not name:startswith("__") then
+                configs[name] = value
+            end
+        end
+        return io.save(filepath, configs)
+    else
+        return io.save(filepath, config.options())
     end
-
-    -- the targets
-    local targets = results._TARGETS or {}
-    results._TARGETS = targets
-
-    -- clear target first
-    targets[targetname] = {}
-
-    -- update target
-    local target = targets[targetname]
-    for name, value in pairs(config.options()) do
-        target[name] = value
-    end
-
-    -- add version
-    results.__version = xmake._VERSION_SHORT
-
-    -- save it
-    return io.save(config.filepath(), results) 
 end
 
--- read value from the configure file directly
-function config.read(name, targetname)
-
-    -- load configs
-    local configs = config._load(targetname)
-
-    -- get it
+-- read value from the configuration file directly
+function config.read(name)
+    local configs
+    if os.isfile(config.filepath()) then
+        configs = io.load(config.filepath())
+    end
     local value = nil
     if configs then
         value = configs[name]
@@ -224,8 +190,6 @@ function config.read(name, targetname)
             value = nil
         end
     end
-
-    -- ok?
     return value
 end
 

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        cleaner.lua
@@ -23,9 +23,9 @@ import("core.base.option")
 import("core.base.global")
 import("core.base.process")
 import("core.project.config")
+import("core.project.project")
 import("core.package.package")
 import("core.platform.platform")
-import("core.platform.environment")
 
 -- clean up temporary files once a day
 function cleanup()
@@ -33,7 +33,7 @@ function cleanup()
     -- has been cleaned up today?
     local markfile = path.join(os.tmpdir(), "cleanup", os.date("%y%m%d") .. ".mark")
     if os.isfile(markfile) then
-        return 
+        return
     end
 
     -- mark as posted first, avoid to post it repeatly
@@ -54,7 +54,7 @@ function cleanup()
     try
     {
         function ()
-            process.openv("xmake", argv, {stdout = path.join(os.tmpdir(), "cleaner.log")}, {detach = true}):close()
+            process.openv("xmake", argv, {stdout = path.join(os.tmpdir(), "cleaner.log"), detach = true}):close()
         end
     }
 end
@@ -72,8 +72,20 @@ function main()
         end
     end
 
+    -- clean up the temporary files of project at last 30 days, @see project.tmpdir()
+    if os.isfile(os.projectfile()) then
+        local parentdir = path.directory(project.tmpdir())
+        for day = 1, 30 do
+            local tmpdir = path.join(parentdir, os.date("%y%m%d", os.time() - day * 24 * 3600))
+            if os.isdir(tmpdir) then
+                print("cleanup %s ..", tmpdir)
+                os.tryrm(tmpdir)
+            end
+        end
+    end
+
     -- clean up the previous month package cache files, @see package.cachedir()
-    local cachedir = path.join(global.directory(), "cache", "packages", os.date("%y%m", os.time() - 31 * 24 * 3600))
+    local cachedir = path.join(package.cachedir({rootonly = true}), os.date("%y%m", os.time() - 31 * 24 * 3600))
     if os.isdir(cachedir) and cachedir ~= package.cachedir() then
         print("cleanup %s ..", cachedir)
         os.tryrm(cachedir)

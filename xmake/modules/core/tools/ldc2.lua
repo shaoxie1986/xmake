@@ -11,28 +11,48 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
 --
--- @author      ruki
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
+--
+-- @author      ruki, BarrOff
 -- @file        ldc2.lua
 --
 
--- inherit dmd
+-- imports
 inherit("dmd")
 
 -- init it
 function init(self)
-    
-    -- init super
-    _super.init(self)
+
+    -- init arflags
+    self:set("dcarflags", "-lib")
 
     -- init shflags
-    self:set("dc-shflags", "-shared")
+    self:set("dcshflags", "-shared", "--relocation-model=pic")
 
-    -- init cxflags for the kind: shared
-    self:set("shared.dcflags", "")
+    -- init dcflags for the kind: shared
+    self:set("shared.dcflags", "--relocation-model=pic")
 end
 
+-- make the optimize flag
+function nf_optimize(self, level)
+    local maps =
+    {
+        fast        = "-O"
+    ,   faster      = "-O --release"
+    ,   fastest     = "-O --release --boundscheck=off"
+    ,   smallest    = "-O --release --boundscheck=off"
+    ,   aggressive  = "-O --release --boundscheck=off"
+    }
+    return maps[level]
+end
 
+-- make the symbol flag
+function nf_symbol(self, level)
+    local maps =
+    {
+        debug = "-g --d-debug"
+    }
+    return maps[level]
+end
 

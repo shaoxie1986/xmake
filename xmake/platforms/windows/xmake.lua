@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -31,22 +31,14 @@ platform("windows")
     set_archs("x86", "x64")
 
     -- set formats
-    set_formats {static = "$(name).lib", object = "$(name).obj", shared = "$(name).dll", binary = "$(name).exe", symbol = "$(name).pdb"}
+    set_formats("static", "$(name).lib")
+    set_formats("object", "$(name).obj")
+    set_formats("shared", "$(name).dll")
+    set_formats("binary", "$(name).exe")
+    set_formats("symbol", "$(name).pdb")
 
-    -- on check project configuration
-    on_config_check("config")
-
-    -- on check global configuration
-    on_global_check("global")
-
-    -- on environment enter
-    on_environment_enter("environment.enter")
-
-    -- on environment leave
-    on_environment_leave("environment.leave")
-
-    -- on load
-    on_load("load")
+    -- set toolchains
+    set_toolchains("msvc", "clang", "yasm", "nasm", "cuda", "dlang", "rust", "go", "gfortran", "zig")
 
     -- set menu
     set_menu {
@@ -59,6 +51,8 @@ platform("windows")
                                                     , "  e.g. --vs_toolset=14.0"                    }
                 ,   {nil, "vs_sdkver",  "kv", nil,    "The Windows SDK Version of Visual Studio"
                                                     , "  e.g. --vs_sdkver=10.0.15063.0"             }
+                ,   {nil, "vs_runtime", "kv", nil,    "The Runtime library of Visual Studio"
+                                                    , values = {"MT", "MTd", "MD", "MDd"}           }
                 ,   {category = "Cuda SDK Configuration"                                            }
                 ,   {nil, "cuda",       "kv", "auto", "The Cuda SDK Directory"                      }
                 ,   {category = "Qt SDK Configuration"                                              }

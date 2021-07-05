@@ -11,26 +11,26 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        has_flags.lua
 --
 
 -- imports
-import("lib.detect.cache")
+import("core.cache.detectcache")
 import("core.language.language")
 
 -- is linker?
 function _islinker(flags, opt)
-  
-    -- the tool kind is go-ld or gosh?
+
+    -- the tool kind is gcld or gcsh?
     local toolkind = opt.toolkind or ""
-    return toolkind:endswith("-ld") or toolkind:endswith("-sh")
+    return toolkind:endswith("ld") or toolkind:endswith("sh")
 end
 
--- try running 
+-- try running
 function _try_running(...)
 
     local argv = {...}
@@ -43,7 +43,7 @@ function _check_from_arglist(flags, opt, islinker)
 
     -- only for compiler
     if islinker or #flags > 1 then
-        return 
+        return
     end
 
     -- make cache key
@@ -52,21 +52,18 @@ function _check_from_arglist(flags, opt, islinker)
     -- make flags key
     local flagskey = opt.program .. "_" .. (opt.programver or "")
 
-    -- load cache
-    local cacheinfo  = cache.load(key)
-
     -- get all flags from argument list
-    local allflags = cacheinfo[flagskey]
+    local allflags = detectcache:get2(key, flagskey)
     if not allflags then
 
         -- attempt to get argument list from the error info (help menu)
         allflags = {}
-        try 
-        { 
+        try
+        {
             function () os.runv(opt.program, {"tool", "compile", "--help"}) end,
-            catch 
+            catch
             {
-                function (errors) 
+                function (errors)
                     local arglist = errors
                     if arglist then
                         for arg in arglist:gmatch("%s+(%-[%-%a%d]+)%s+") do
@@ -78,11 +75,9 @@ function _check_from_arglist(flags, opt, islinker)
         }
 
         -- save cache
-        cacheinfo[flagskey] = allflags
-        cache.save(key, cacheinfo)
+        detectcache:set2(key, flagskey, allflags)
+        detectcache:save()
     end
-
-    -- ok?
     return allflags[flags[1]]
 end
 
@@ -114,7 +109,7 @@ function _check_try_running(flags, opt, islinker)
 end
 
 -- has_flags(flags)?
--- 
+--
 -- @param opt   the argument options, e.g. {toolname = "", program = "", programver = "", toolkind = "[cc|cxx|ld|ar|sh|gc|mm|mxx]"}
 --
 -- @return      true or false

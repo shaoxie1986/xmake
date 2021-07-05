@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        vs201x_vcxproj.lua
@@ -36,23 +36,11 @@ function _get_toolset_ver(targetinfo, vsinfo)
     if not toolset_ver then
         toolset_ver = vsinfo.toolset_version
     end
-
-    -- for xp?
-    for _, flag in ipairs(targetinfo.linkflags) do
-        if flag:lower():find("^[%-/]subsystem:.-,5%.%d+$") then
-            toolset_ver = toolset_ver .. "_xp"
-            break
-        end
-    end
-
-    -- done
     return toolset_ver
 end
 
--- get platform sdk version
+-- get platform sdk version from vcvars.WindowsSDKVersion
 function _get_platform_sdkver(target, vsinfo)
-
-    -- get sdk version for vcvarsall[arch].WindowsSDKVersion
     local sdkver = nil
     for _, targetinfo in ipairs(target.info) do
         sdkver = targetinfo.sdkver
@@ -60,20 +48,25 @@ function _get_platform_sdkver(target, vsinfo)
             break
         end
     end
-
-    -- done
     return sdkver or vsinfo.sdk_version
 end
 
 -- make compiling command
 function _make_compcmd(compargv, sourcefile, objectfile, vcxprojdir)
     local argv = {}
-    for _, v in ipairs(compargv) do
+    for i, v in ipairs(compargv) do
+        if i == 1 then
+            v = path.filename(v) -- C:\xxx\ml.exe -> ml.exe
+        end
         v = v:gsub("__sourcefile__", sourcefile)
         v = v:gsub("__objectfile__", objectfile)
         -- -Idir or /Idir
         v = v:gsub("([%-/]I)(.*)", function (I, dir)
-                dir = path.translate(dir:trim())
+                dir = dir:trim()
+                if #dir == 0 then
+                    return ""
+                end
+                dir = path.translate(dir)
                 if not path.is_absolute(dir) then
                     dir = path.relative(path.absolute(dir), vcxprojdir)
                 end
@@ -93,7 +86,11 @@ function _make_compflags(sourcefile, targetinfo, vcxprojdir)
 
         -- -Idir or /Idir
         flag = flag:gsub("[%-/]I(.*)", function (dir)
-                        dir = path.translate(dir:trim())
+                        dir = dir:trim()
+                        if #dir == 0 then
+                            return ""
+                        end
+                        dir = path.translate(dir)
                         if not path.is_absolute(dir) then
                             dir = path.relative(path.absolute(dir), vcxprojdir)
                         end
@@ -121,7 +118,11 @@ function _make_linkflags(targetinfo, vcxprojdir)
 
         -- replace -libpath:dir or /libpath:dir
         flag = flag:gsub(string.ipattern("[%-/]libpath:(.*)"), function (dir)
-                        dir = path.translate(dir:trim())
+                        dir = dir:trim()
+                        if #dir == 0 then
+                            return ""
+                        end
+                        dir = path.translate(dir)
                         if not path.is_absolute(dir) then
                             dir = path.relative(path.absolute(dir), vcxprojdir)
                         end
@@ -130,7 +131,11 @@ function _make_linkflags(targetinfo, vcxprojdir)
 
         -- replace -def:dir or /def:dir
         flag = flag:gsub(string.ipattern("[%-/]def:(.*)"), function (dir)
-                        dir = path.translate(dir:trim())
+                        dir = dir:trim()
+                        if #dir == 0 then
+                            return ""
+                        end
+                        dir = path.translate(dir)
                         if not path.is_absolute(dir) then
                             dir = path.relative(path.absolute(dir), vcxprojdir)
                         end
@@ -140,7 +145,7 @@ function _make_linkflags(targetinfo, vcxprojdir)
         -- save flag
         table.insert(flags, flag)
     end
-    
+
     -- ok?
     return flags
 end
@@ -252,51 +257,51 @@ function _make_source_options(vcxprojfile, flags, condition)
 
     -- make Optimization
     if flagstr:find("[%-/]Os") or flagstr:find("[%-/]O1") then
-        vcxprojfile:print("<Optimization%s>MinSpace</Optimization>", condition) 
+        vcxprojfile:print("<Optimization%s>MinSpace</Optimization>", condition)
     elseif flagstr:find("[%-/]O2") or flagstr:find("[%-/]Ot") then
-        vcxprojfile:print("<Optimization%s>MaxSpeed</Optimization>", condition) 
+        vcxprojfile:print("<Optimization%s>MaxSpeed</Optimization>", condition)
     elseif flagstr:find("[%-/]Ox") then
-        vcxprojfile:print("<Optimization%s>Full</Optimization>", condition) 
+        vcxprojfile:print("<Optimization%s>Full</Optimization>", condition)
     else
-        vcxprojfile:print("<Optimization%s>Disabled</Optimization>", condition) 
+        vcxprojfile:print("<Optimization%s>Disabled</Optimization>", condition)
     end
 
     -- make FloatingPointModel
     if flagstr:find("[%-/]fp:fast") then
-        vcxprojfile:print("<FloatingPointModel%s>Fast</FloatingPointModel>", condition) 
+        vcxprojfile:print("<FloatingPointModel%s>Fast</FloatingPointModel>", condition)
     elseif flagstr:find("[%-/]fp:strict") then
-        vcxprojfile:print("<FloatingPointModel%s>Strict</FloatingPointModel>", condition) 
+        vcxprojfile:print("<FloatingPointModel%s>Strict</FloatingPointModel>", condition)
     elseif flagstr:find("[%-/]fp:precise") then
-        vcxprojfile:print("<FloatingPointModel%s>Precise</FloatingPointModel>", condition) 
+        vcxprojfile:print("<FloatingPointModel%s>Precise</FloatingPointModel>", condition)
     end
 
     -- make WarningLevel
     if flagstr:find("[%-/]W1") then
-        vcxprojfile:print("<WarningLevel%s>Level1</WarningLevel>", condition) 
+        vcxprojfile:print("<WarningLevel%s>Level1</WarningLevel>", condition)
     elseif flagstr:find("[%-/]W2") then
-        vcxprojfile:print("<WarningLevel%s>Level2</WarningLevel>", condition) 
+        vcxprojfile:print("<WarningLevel%s>Level2</WarningLevel>", condition)
     elseif flagstr:find("[%-/]W3") then
-        vcxprojfile:print("<WarningLevel%s>Level3</WarningLevel>", condition) 
+        vcxprojfile:print("<WarningLevel%s>Level3</WarningLevel>", condition)
     elseif flagstr:find("[%-/]Wall") then
-        vcxprojfile:print("<WarningLevel%s>EnableAllWarnings</WarningLevel>", condition) 
+        vcxprojfile:print("<WarningLevel%s>EnableAllWarnings</WarningLevel>", condition)
     else
-        vcxprojfile:print("<WarningLevel%s>TurnOffAllWarnings</WarningLevel>", condition) 
+        vcxprojfile:print("<WarningLevel%s>TurnOffAllWarnings</WarningLevel>", condition)
     end
     if flagstr:find("[%-/]WX") then
-        vcxprojfile:print("<TreatWarningAsError%s>true</TreatWarningAsError>", condition) 
+        vcxprojfile:print("<TreatWarningAsError%s>true</TreatWarningAsError>", condition)
     end
-    
+
     -- make PreprocessorDefinitions
     local defstr = ""
     for _, flag in ipairs(flags) do
         flag:gsub("[%-/]D(.*)",
-            function (def) 
+            function (def)
                 defstr = defstr .. def .. ";"
             end
         )
     end
     defstr = defstr .. "%%(PreprocessorDefinitions)"
-    vcxprojfile:print("<PreprocessorDefinitions%s>%s</PreprocessorDefinitions>", condition, defstr) 
+    vcxprojfile:print("<PreprocessorDefinitions%s>%s</PreprocessorDefinitions>", condition, defstr)
 
     -- make DebugInformationFormat
     if flagstr:find("[%-/]Zi") then
@@ -316,8 +321,16 @@ function _make_source_options(vcxprojfile, flags, condition)
         vcxprojfile:print("<RuntimeLibrary%s>MultiThreadedDLL</RuntimeLibrary>", condition)
     elseif flagstr:find("[%-/]MTd") then
         vcxprojfile:print("<RuntimeLibrary%s>MultiThreadedDebug</RuntimeLibrary>", condition)
-    elseif flagstr:find("[%-/]MT") then
+    else
         vcxprojfile:print("<RuntimeLibrary%s>MultiThreaded</RuntimeLibrary>", condition)
+    end
+
+    -- handle multi processor compilation
+    if flagstr:find("[%-/]Gm-") or not flagstr:find("[%-/]Gm") then
+        vcxprojfile:print("<MinimalRebuild%s>false</MinimalRebuild>", condition)
+        if flagstr:find("[%-/]MP") then
+            vcxprojfile:print("<MultiProcessorCompilation%s>true</MultiProcessorCompilation>", condition)
+        end
     end
 
     -- make AdditionalIncludeDirectories
@@ -338,7 +351,7 @@ function _make_source_options(vcxprojfile, flags, condition)
 
     -- make AdditionalOptions
     local additional_flags = {}
-    local excludes = {"Od", "Os", "O0", "O1", "O2", "Ot", "Ox", "W0", "W1", "W2", "W3", "WX", "Wall", "Zi", "ZI", "Z7", "MT", "MTd", "MD", "MDd", "TP", "Fd", "fp", "I", "D"}
+    local excludes = {"Od", "Os", "O0", "O1", "O2", "Ot", "Ox", "W0", "W1", "W2", "W3", "WX", "Wall", "Zi", "ZI", "Z7", "MT", "MTd", "MD", "MDd", "TP", "Fd", "fp", "I", "D", "Gm-", "Gm"}
     for _, flag in ipairs(flags) do
         local excluded = false
         for _, exclude in ipairs(excludes) do
@@ -356,14 +369,14 @@ function _make_source_options(vcxprojfile, flags, condition)
     end
 end
 
--- make common item 
+-- make common item
 function _make_common_item(vcxprojfile, vsinfo, target, targetinfo, vcxprojdir)
 
-    -- enter ItemDefinitionGroup 
+    -- enter ItemDefinitionGroup
     vcxprojfile:enter("<ItemDefinitionGroup Condition=\"\'%$(Configuration)|%$(Platform)\'==\'%s|%s\'\">", targetinfo.mode, targetinfo.arch)
-    
+
     -- init the linker kinds
-    local linkerkinds = 
+    local linkerkinds =
     {
         binary = "Link"
     ,   static = "Lib"
@@ -413,7 +426,7 @@ function _make_common_item(vcxprojfile, vsinfo, target, targetinfo, vcxprojdir)
         if targetinfo.targetkind == "binary" then
             vcxprojfile:print("<SubSystem>%s</SubSystem>", subsystem)
         end
-    
+
         -- make TargetMachine
         vcxprojfile:print("<TargetMachine>%s</TargetMachine>", (targetinfo.arch == "x64" and "MachineX64" or "MachineX86"))
 
@@ -429,7 +442,7 @@ function _make_common_item(vcxprojfile, vsinfo, target, targetinfo, vcxprojdir)
 
         -- use c or c++ precompiled header
         local pcheader = target.pcxxheader or target.pcheader
-        if pcheader then 
+        if pcheader then
 
             -- make precompiled header and outputfile
             vcxprojfile:print("<PrecompiledHeader>Use</PrecompiledHeader>")
@@ -438,11 +451,12 @@ function _make_common_item(vcxprojfile, vsinfo, target, targetinfo, vcxprojdir)
             if pcoutputfile then
                 vcxprojfile:print("<PrecompiledHeaderOutputFile>%s</PrecompiledHeaderOutputFile>", path.relative(path.absolute(pcoutputfile), vcxprojdir))
             end
+            vcxprojfile:print("<ForcedIncludeFiles>%s;%%(ForcedIncludeFiles)</ForcedIncludeFiles>", path.filename(pcheader))
         end
 
     vcxprojfile:leave("</ClCompile>")
 
-    -- leave ItemDefinitionGroup 
+    -- leave ItemDefinitionGroup
     vcxprojfile:leave("</ItemDefinitionGroup>")
 end
 
@@ -520,7 +534,7 @@ end
 -- make source file for all modes
 function _make_source_file_forall(vcxprojfile, vsinfo, target, sourcefile, sourceinfo, vcxprojdir)
 
-    -- get object file and source kind 
+    -- get object file and source kind
     local sourcekind = nil
     for _, info in ipairs(sourceinfo) do
         sourcekind = info.sourcekind
@@ -555,20 +569,15 @@ function _make_source_file_forall(vcxprojfile, vsinfo, target, sourcefile, sourc
         else
 
             -- init items
-            local items = 
+            local items =
             {
-                AdditionalOptions = 
+                AdditionalOptions =
                 {
                     key = function (info) return os.args(info.flags) end
                 ,   value = function (key) return key .. " %%(AdditionalOptions)" end
                 }
-            ,   ObjectFileName =
-                {
-                    key = function (info) return path.relative(path.absolute(info.objectfile), vcxprojdir) end
-                ,   value = function (key) return key end
-                }
             }
-        
+
             -- make items
             for itemname, iteminfo in pairs(items) do
 
@@ -651,7 +660,7 @@ function _make_source_file_forspec(vcxprojfile, vsinfo, target, sourcefile, sour
 
         -- for *.asm files
         local objectfile = path.relative(path.absolute(info.objectfile), vcxprojdir)
-        if info.sourcekind == "as" then 
+        if info.sourcekind == "as" then
             local compcmd = _make_compcmd(info.compargv, sourcefile, objectfile, vcxprojdir)
             vcxprojfile:print("<ExcludedFromBuild>false</ExcludedFromBuild>")
             vcxprojfile:print("<FileType>Document</FileType>")
@@ -670,7 +679,6 @@ function _make_source_file_forspec(vcxprojfile, vsinfo, target, sourcefile, sour
             if pcheader and language.sourcekind_of(sourcefile) ~= (target.pcxxheader and "cxx" or "cc") then
                 vcxprojfile:print("<PrecompiledHeader>NotUsing</PrecompiledHeader>")
             end
-            vcxprojfile:print("<ObjectFileName>%s</ObjectFileName>", objectfile)
             vcxprojfile:print("<AdditionalOptions>%s %%(AdditionalOptions)</AdditionalOptions>", os.args(info.flags))
         end
 
@@ -679,7 +687,7 @@ function _make_source_file_forspec(vcxprojfile, vsinfo, target, sourcefile, sour
     end
 end
 
--- make source file for precompiled header 
+-- make source file for precompiled header
 function _make_source_file_forpch(vcxprojfile, vsinfo, target, vcxprojdir)
 
     -- add precompiled source file
@@ -733,21 +741,25 @@ function _make_source_files(vcxprojfile, vsinfo, target, vcxprojdir)
         -- make source files
         for sourcefile, sourceinfo in pairs(sourceinfos) do
             if #sourceinfo == #target.info then
-                _make_source_file_forall(vcxprojfile, vsinfo, target, sourcefile, sourceinfo, vcxprojdir) 
+                _make_source_file_forall(vcxprojfile, vsinfo, target, sourcefile, sourceinfo, vcxprojdir)
             else
-                _make_source_file_forspec(vcxprojfile, vsinfo, target, sourcefile, sourceinfo, vcxprojdir) 
+                _make_source_file_forspec(vcxprojfile, vsinfo, target, sourcefile, sourceinfo, vcxprojdir)
             end
         end
 
         -- make precompiled source file
-        _make_source_file_forpch(vcxprojfile, vsinfo, target, vcxprojdir) 
+        _make_source_file_forpch(vcxprojfile, vsinfo, target, vcxprojdir)
 
     vcxprojfile:leave("</ItemGroup>")
 
-    -- add headers
+    -- add header files
+    local pcheader = target.pcxxheader or target.pcheader
     vcxprojfile:enter("<ItemGroup>")
         for _, includefile in ipairs(target.headerfiles) do
-            _make_header_file(vcxprojfile, includefile, vcxprojdir)
+            -- we need ignore pcheader file to fix https://github.com/xmake-io/xmake/issues/1171
+            if not pcheader or includefile ~= pcheader then
+                _make_header_file(vcxprojfile, includefile, vcxprojdir)
+            end
         end
     vcxprojfile:leave("</ItemGroup>")
 end

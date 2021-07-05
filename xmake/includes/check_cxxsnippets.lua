@@ -11,14 +11,14 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        check_cxxsnippets.lua
 --
 
--- check c++ snippets and add macro definition 
+-- check c++ snippets and add macro definition
 --
 -- e.g.
 --
@@ -48,11 +48,14 @@ function check_cxxsnippets(definition, snippets, opt)
         if opt.defines then
             add_defines(opt.defines)
         end
+        if opt.warnings then
+            set_warnings(opt.warnings)
+        end
     option_end()
     add_options(optname)
 end
 
--- check c++ snippets and add macro definition to the configuration snippets 
+-- check c++ snippets and add macro definition to the configuration snippets
 --
 -- e.g.
 --
@@ -82,6 +85,9 @@ function configvar_check_cxxsnippets(definition, snippets, opt)
         end
         if opt.defines then
             add_defines(opt.defines)
+        end
+        if opt.warnings then
+            set_warnings(opt.warnings)
         end
     option_end()
     add_options(optname)

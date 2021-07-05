@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        ar.lua
@@ -20,24 +20,26 @@
 
 -- imports
 import("core.tool.compiler")
+import("private.utils.progress")
 
 -- init it
 function init(self)
     self:set("arflags", "-cr")
+    self:set("dcarflags", "-cr") -- for dlang/gdc, e.g. x86_64-unknown-linux-gnu-gcc-ar
 end
 
 -- make the strip flag
 function strip(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-S"
     ,   all   = "-s"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the link arguments list
@@ -47,17 +49,10 @@ function linkargv(self, objectfiles, targetkind, targetfile, flags, opt)
     assert(targetkind == "static")
 
     -- init arguments
+    opt = opt or {}
     local argv = table.join(flags, targetfile, objectfiles)
-
-    -- too long arguments for windows? 
-    if is_host("windows") then
-        opt = opt or {}
-        local args = os.args(argv, {escape = true})
-        if #args > 1024 and not opt.rawargs then
-            local argsfile = os.tmpfile(args) .. ".args.txt" 
-            io.writefile(argsfile, args)
-            argv = {"@" .. argsfile}
-        end
+    if is_host("windows") and not opt.rawargs then
+        argv = winos.cmdargv(argv, {escape = true})
     end
 
     -- make it
@@ -77,35 +72,8 @@ function link(self, objectfiles, targetkind, targetfile, flags)
     os.tryrm(targetfile)
 
     -- link it
-    os.runv(linkargv(self, objectfiles, targetkind, targetfile, flags))
+    local program, argv = linkargv(self, objectfiles, targetkind, targetfile, flags)
+    os.runv(program, argv, {envs = self:runenvs()})
 end
 
--- extract the static library to object directory
-function extract(self, libraryfile, objectdir)
-
-    -- make the object directory first
-    os.mkdir(objectdir)
-
-    -- get the absolute path of this library
-    libraryfile = path.absolute(libraryfile)
-
-    -- enter the object directory
-    local oldir = os.cd(objectdir)
-
-    -- extract it
-    os.runv(self:program(), {"-x", libraryfile})
-
-    -- check repeat object name
-    local repeats = {}
-    local objectfiles = os.iorunv(self:program(), {"-t", libraryfile})
-    for _, objectfile in ipairs(objectfiles:split('\n')) do
-        if repeats[objectfile] then
-            raise("object name(%s) conflicts in library: %s", objectfile, libraryfile)
-        end
-        repeats[objectfile] = true
-    end                                                          
-
-    -- leave the object directory
-    os.cd(oldir)
-end
 

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        uninstall.lua
@@ -22,92 +22,13 @@
 import("core.base.task")
 import("core.project.rule")
 import("core.project.project")
-
--- uninstall files
-function _uninstall_files(target)
-
-    local _, dstfiles = target:installfiles()
-    for _, dstfile in ipairs(dstfiles) do
-        os.vrm(dstfile)
-    end
-end
-
--- uninstall binary
-function _uninstall_binary(target)
-
-    -- is phony target?
-    if target:isphony() then
-        return 
-    end
-
-    -- the binary directory
-    local binarydir = path.join(target:installdir(), "bin")
-
-    -- remove the target file
-    os.vrm(path.join(binarydir, path.filename(target:targetfile())))
-end
-
--- uninstall library
-function _uninstall_library(target)
-
-    -- is phony target?
-    if target:isphony() then
-        return 
-    end
-
-    -- the library directory
-    local librarydir = path.join(target:installdir(), "lib")
-
-    -- the include directory
-    local includedir = path.join(target:installdir(), "include")
-
-    -- remove the target file
-    os.vrm(path.join(librarydir, path.filename(target:targetfile())))
-
-    -- remove headers from the include directory
-    local _, dstheaders = target:headerfiles(includedir)
-    for _, dstheader in ipairs(dstheaders) do
-        os.vrm(dstheader)
-    end
-end
-
--- do uninstall target
-function _do_uninstall_target(target)
-
-    -- the scripts
-    local scripts =
-    {
-        binary = _uninstall_binary
-    ,   static = _uninstall_library
-    ,   shared = _uninstall_library
-    }
-
-    -- call script
-    local script = scripts[target:targetkind()]
-    if script then
-        script(target)
-    end
-
-    -- uninstall the other files
-    _uninstall_files(target)
-end
+import("target.action.uninstall", {alias = "_do_uninstall_target"})
 
 -- on uninstall target
 function _on_uninstall_target(target)
 
-    -- has been disabled?
-    if target:get("enabled") == false then
-        return 
-    end
-
-    -- get install directory
-    local installdir = target:installdir()
-    if not installdir then
-        return 
-    end
-
     -- trace
-    print("uninstalling %s from %s ...", target:name(), installdir)
+    print("uninstalling %s ..", target:name())
 
     -- build target with rules
     local done = false
@@ -124,31 +45,25 @@ function _on_uninstall_target(target)
     _do_uninstall_target(target)
 end
 
--- uninstall the given target 
+-- uninstall the given target
 function _uninstall_target(target)
+
+    -- has been disabled?
+    if not target:is_enabled() then
+        return
+    end
 
     -- enter project directory
     local oldir = os.cd(project.directory())
 
     -- enter the environments of the target packages
-    local oldenvs = {}
-    for name, values in pairs(target:pkgenvs()) do
-        oldenvs[name] = os.getenv(name)
-        os.addenv(name, unpack(values))
-    end
+    local oldenvs = os.addenvs(target:pkgenvs())
 
     -- the target scripts
     local scripts =
     {
         target:script("uninstall_before")
     ,   function (target)
-
-            -- has been disabled?
-            if target:get("enabled") == false then
-                return 
-            end
-
-            -- uninstall rules
             for _, r in ipairs(target:orderules()) do
                 local before_uninstall = r:script("uninstall_before")
                 if before_uninstall then
@@ -158,13 +73,6 @@ function _uninstall_target(target)
         end
     ,   target:script("uninstall", _on_uninstall_target)
     ,   function (target)
-
-            -- has been disabled?
-            if target:get("enabled") == false then
-                return 
-            end
-
-            -- uninstall rules
             for _, r in ipairs(target:orderules()) do
                 local after_uninstall = r:script("uninstall_after")
                 if after_uninstall then
@@ -184,47 +92,29 @@ function _uninstall_target(target)
     end
 
     -- leave the environments of the target packages
-    for name, values in pairs(oldenvs) do
-        os.setenv(name, values)
-    end
+    os.setenvs(oldenvs)
 
     -- leave project directory
     os.cd(oldir)
 end
 
--- uninstall the given target and deps
-function _uninstall_target_and_deps(target)
-
-    -- this target have been finished?
-    if _g.finished[target:name()] then
-        return 
+-- uninstall the given targets
+function _uninstall_targets(targets)
+    for _, target in ipairs(targets) do
+        _uninstall_target(target)
     end
-
-    -- uninstall for all dependent targets
-    for _, depname in ipairs(target:get("deps")) do
-        _uninstall_target_and_deps(project.target(depname)) 
-    end
-
-    -- uninstall target
-    _uninstall_target(target)
-
-    -- finished
-    _g.finished[target:name()] = true
 end
 
 -- uninstall
 function main(targetname)
 
-    -- init finished states
-    _g.finished = {}
-
-    -- uninstall given target?
-    if targetname then
-        _uninstall_target_and_deps(project.target(targetname))
+    -- uninstall the given target?
+    if targetname and not targetname:startswith("__") then
+        local target = project.target(targetname)
+        _uninstall_targets(target:orderdeps())
+        _uninstall_target(target)
     else
         -- uninstall all targets
-        for _, target in pairs(project.targets()) do
-            _uninstall_target_and_deps(target)
-        end
+        _uninstall_targets(project.ordertargets())
     end
 end

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        configheader.lua
@@ -26,7 +26,7 @@ import("core.project.project")
 -- make configure for the given target name
 function _make_for_target(target)
 
-    -- get the target configure file 
+    -- get the target configure file
     local configheader = target:configheader()
     if not configheader then return end
 
@@ -44,7 +44,7 @@ function _make_for_target(target)
 
     -- make version
     local version, version_build = target:configversion()
-    if not version or not version_build then 
+    if not version or not version_build then
         local target_version, target_version_build = target:version()
         if not version then
             version = target_version
@@ -69,48 +69,6 @@ function _make_for_target(target)
         file:print("")
     end
 
-    -- make the defines
-    local defines = table.copy(target:get("defines_h")) 
-
-    -- make the undefines
-    local undefines = table.copy(target:get("undefines_h")) 
-
-    -- make the defines for options
-    for _, opt in ipairs(target:orderopts()) do
-        table.join2(defines, opt:get("defines_h")) 
-        table.join2(defines, opt:get("defines_h_if_ok")) -- deprecated 
-        table.join2(undefines, opt:get("undefines_h")) 
-        table.join2(undefines, opt:get("undefines_h_if_ok")) -- deprecated
-    end
-
-    -- make the defines for packages
-    for _, pkg in ipairs(target:orderpkgs()) do
-        table.join2(defines, pkg:get("defines_h")) 
-        table.join2(undefines, pkg:get("undefines_h")) 
-    end
-
-    -- make the defines
-    if #defines ~= 0 then
-        file:print("// defines")
-        for _, define in ipairs(defines) do
-            if define:find("=") then
-                file:print("#define %s", define:gsub("=", " "):gsub("%$%((.-)%)", function (w) if w == "prefix" then return configprefix end end))
-            else
-                file:print("#define %s 1", define:gsub("%$%((.-)%)", function (w) if w == "prefix" then return configprefix end end))
-            end
-        end
-        file:print("")
-    end
-
-    -- make the undefines 
-    if #undefines ~= 0 then
-        file:print("// undefines")
-        for _, undefine in ipairs(undefines) do
-            file:print("#undef %s", undefine:gsub("%$%((.-)%)", function (w) if w == "prefix" then return configprefix end end))
-        end
-        file:print("")
-    end
-
     -- make the tail
     file:print("#endif")
 
@@ -120,16 +78,12 @@ end
 
 -- make the configure file for the given target and dependents
 function _make_for_target_with_deps(targetname)
-
-    -- the target
     local target = project.target(targetname)
-
-    -- make configure for the target
-    _make_for_target(target)
-     
-    -- make configure for the dependent targets?
-    for _, dep in ipairs(target:get("deps")) do
-        _make_for_target_with_deps(dep)
+    if target then
+        _make_for_target(target)
+        for _, dep in ipairs(target:get("deps")) do
+            _make_for_target_with_deps(dep)
+        end
     end
 end
 
@@ -172,7 +126,7 @@ function main()
             end
         end
     end
- 
+
     -- leave project directory
     os.cd(oldir)
 end

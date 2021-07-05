@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        yasm.lua
@@ -23,7 +23,7 @@ import("core.base.option")
 
 -- init it
 function init(self)
-  
+
     -- init flags map
     self:set("mapflags",
     {
@@ -49,13 +49,13 @@ end
 function nf_warning(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none  = "-w"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the define flag
@@ -70,16 +70,21 @@ end
 
 -- make the includedir flag
 function nf_includedir(self, dir)
-    return "-I" .. os.args(dir)
+    return {"-I", dir}
+end
+
+-- make the sysincludedir flag
+function nf_sysincludedir(self, dir)
+    return nf_includedir(self, dir)
 end
 
 -- make the compile arguments list
-function _compargv1(self, sourcefile, objectfile, flags)
+function compargv(self, sourcefile, objectfile, flags)
     return self:program(), table.join(flags, "-o", objectfile, sourcefile)
 end
 
 -- compile the source file
-function _compile1(self, sourcefile, objectfile, dependinfo, flags)
+function compile(self, sourcefile, objectfile, dependinfo, flags)
 
     -- ensure the object directory
     os.mkdir(path.directory(objectfile))
@@ -88,7 +93,7 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
     local outdata, errdata = try
     {
         function ()
-            return os.iorunv(_compargv1(self, sourcefile, objectfile, flags))
+            return os.iorunv(compargv(self, sourcefile, objectfile, flags))
         end,
         catch
         {
@@ -98,7 +103,7 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
                 os.tryrm(objectfile)
 
                 -- raise compiling errors
-                raise(errors)
+                raise(tostring(errors))
             end
         },
         finally
@@ -115,25 +120,5 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
             end
         }
     }
-end
-
--- make the compile arguments list
-function compargv(self, sourcefiles, objectfile, flags)
-
-    -- only support single source file now
-    assert(type(sourcefiles) ~= "table", "'object:sources' not support!")
-
-    -- for only single source file
-    return _compargv1(self, sourcefiles, objectfile, flags)
-end
-
--- compile the source file
-function compile(self, sourcefiles, objectfile, dependinfo, flags)
-
-    -- only support single source file now
-    assert(type(sourcefiles) ~= "table", "'object:sources' not support!")
-
-    -- for only single source file
-    _compile1(self, sourcefiles, objectfile, dependinfo, flags)
 end
 

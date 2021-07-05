@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        project.lua
@@ -35,16 +35,34 @@ local environment = require("platform/environment")
 local package     = require("package/package")
 local import      = require("sandbox/modules/import")
 
--- load project
-function sandbox_core_project.load()
-    -- deprecated
-    deprecated.add("project.clear() or only remove it", "project.load()")
-end
-
--- clear project
-function sandbox_core_project.clear()
-    project.clear()
-end
+-- export some readonly interfaces
+sandbox_core_project.get               = project.get
+sandbox_core_project.extraconf         = project.extraconf
+sandbox_core_project.rule              = project.rule
+sandbox_core_project.rules             = project.rules
+sandbox_core_project.toolchain         = project.toolchain
+sandbox_core_project.toolchains        = project.toolchains
+sandbox_core_project.target            = project.target
+sandbox_core_project.targets           = project.targets
+sandbox_core_project.ordertargets      = project.ordertargets
+sandbox_core_project.option            = project.option
+sandbox_core_project.options           = project.options
+sandbox_core_project.rootfile          = project.rootfile
+sandbox_core_project.allfiles          = project.allfiles
+sandbox_core_project.rcfiles           = project.rcfiles
+sandbox_core_project.directory         = project.directory
+sandbox_core_project.name              = project.name
+sandbox_core_project.modes             = project.modes
+sandbox_core_project.mtimes            = project.mtimes
+sandbox_core_project.version           = project.version
+sandbox_core_project.required_package  = project.required_package
+sandbox_core_project.required_packages = project.required_packages
+sandbox_core_project.requires_str      = project.requires_str
+sandbox_core_project.requireconfs_str  = project.requireconfs_str
+sandbox_core_project.policy            = project.policy
+sandbox_core_project.tmpdir            = project.tmpdir
+sandbox_core_project.tmpfile           = project.tmpfile
+sandbox_core_project.is_loaded         = project.is_loaded
 
 -- check project options
 function sandbox_core_project.check()
@@ -65,12 +83,9 @@ function sandbox_core_project.check()
         raise(errors)
     end
 
-    -- enter toolchains environment
-    environment.enter("toolchains")
-
     -- init check task
     local checked   = {}
-    local checktask = function (index) 
+    local checktask = function (index)
 
         -- get option
         local opt = options[index]
@@ -86,7 +101,7 @@ function sandbox_core_project.check()
 
             -- check this option
             if not checked[opt:name()] then
-                opt:check() 
+                opt:check()
                 checked[opt:name()] = true
             end
         end
@@ -95,9 +110,6 @@ function sandbox_core_project.check()
     -- check all options
     local jobs = baseoption.get("jobs") or math.ceil(os.cpuinfo().ncpu * 3 / 2)
     import("private.async.runjobs", {anonymous = true})("check_options", instance:fork(checktask):script(), {total = #options, comax = jobs})
-
-    -- leave toolchains environment
-    environment.leave("toolchains")
 
     -- save all options to the cache file
     option.save()
@@ -109,71 +121,22 @@ function sandbox_core_project.check()
     end
 end
 
--- get the given project rule
-function sandbox_core_project.rule(name)
-    return project.rule(name)
-end
-
--- get the all project rules
-function sandbox_core_project.rules()
-    return project.rules()
-end
-
--- get the given target
-function sandbox_core_project.target(name)
-    return project.target(name)
-end
-
--- get the all targets
-function sandbox_core_project.targets()
-    return project.targets()
-end
-
--- get the given option
-function sandbox_core_project.option(name)
-    return project.option(name)
-end
-
--- get the all options
-function sandbox_core_project.options()
-    return project.options()
-end
-
--- get the root project file
-function sandbox_core_project.rootfile()
-    return project.rootfile()
-end
-
--- get the all loaded project files
-function sandbox_core_project.allfiles()
-    return project.allfiles()
-end
-
--- get the project rcfile
-function sandbox_core_project.rcfile()
-    return project.rcfile()
-end
-
--- get the project directory
-function sandbox_core_project.directory()
-    return project.directory()
-end
-
 -- get the filelock of the whole project directory
 function sandbox_core_project.filelock()
-    local filelock = project.filelock()
+    local filelock, errors = project.filelock()
     if not filelock then
-        raise("cannot create the project lock!")
+        raise("cannot create the project lock, %s!", errors or "unknown errors")
     end
     return filelock
 end
 
--- lock the whole project 
+-- lock the whole project
 function sandbox_core_project.lock(opt)
     if sandbox_core_project.trylock(opt) then
         return true
     elseif baseoption.get("diagnosis") then
-        utils.warning("the current project is being accessed by other processes, please waiting!")
+        utils.cprint("${color.warning}the current project is being accessed by other processes, please waiting!")
+        io.flush()
     end
     local ok, errors = sandbox_core_project.filelock():lock(opt)
     if not ok then
@@ -181,72 +144,17 @@ function sandbox_core_project.lock(opt)
     end
 end
 
--- trylock the whole project 
+-- trylock the whole project
 function sandbox_core_project.trylock(opt)
     return sandbox_core_project.filelock():trylock(opt)
 end
 
--- unlock the whole project 
+-- unlock the whole project
 function sandbox_core_project.unlock()
     local ok, errors = sandbox_core_project.filelock():unlock()
     if not ok then
         raise(errors)
     end
-end
-
--- get the project mtimes
-function sandbox_core_project.mtimes()
-    return project.mtimes()
-end
-
--- get the project info from the given name
-function sandbox_core_project.get(name)
-    return project.get(name)
-end
-
--- get the project name
-function sandbox_core_project.name()
-    local name = project.get("project")
-    -- TODO multi project names? we only get the first name now.
-    -- and we need improve it in the future.
-    if type(name) == "table" then
-        name = name[1]
-    end
-    return name
-end
-
--- get the project version, the root version of the target scope
-function sandbox_core_project.version()
-    return project.get("target.version")
-end
-
--- get the project modes
-function sandbox_core_project.modes()
-    local modes = project.get("modes") or {}
-    for _, target in pairs(table.wrap(project.targets())) do
-        for _, rule in ipairs(target:orderules()) do
-            local name = rule:name()
-            if name:startswith("mode.") then
-                table.insert(modes, name:sub(6))
-            end
-        end
-    end
-    return table.unique(modes)
-end
-
--- get the the given require info
-function sandbox_core_project.require(name)
-    return project.require(name)
-end
-
--- get the all requires
-function sandbox_core_project.requires()
-    return project.requires()
-end
-
--- get the all raw string requires
-function sandbox_core_project.requires_str()
-    return project.requires_str()
 end
 
 -- return module

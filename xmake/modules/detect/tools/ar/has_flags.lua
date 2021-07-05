@@ -11,22 +11,22 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        has_flags.lua
 --
 
 -- imports
-import("lib.detect.cache")
+import("core.cache.detectcache")
 
--- attempt to check it from the argument list 
+-- attempt to check it from the argument list
 function _check_from_arglist(flags, opt)
 
     -- only one flag?
     if #flags > 1 then
-        return 
+        return
     end
 
     -- make cache key
@@ -35,21 +35,18 @@ function _check_from_arglist(flags, opt)
     -- make allflags key
     local flagskey = opt.program .. "_" .. (opt.programver or "")
 
-    -- load cache
-    local cacheinfo  = cache.load(key)
-
     -- get all allflags from argument list
-    local allflags = cacheinfo[flagskey]
+    local allflags = detectcache:get2(key, flagskey)
     if not allflags then
 
         -- get argument list
         allflags = {}
         local arglist = nil
-        try 
-        { 
+        try
+        {
             function () os.runv(opt.program, {"--help"}) end,
-            catch 
-            { 
+            catch
+            {
                 function (errors) arglist = errors end
             }
         }
@@ -65,8 +62,8 @@ function _check_from_arglist(flags, opt)
         end
 
         -- save cache
-        cacheinfo[flagskey] = allflags
-        cache.save(key, cacheinfo)
+        detectcache:set2(key, flagskey, allflags)
+        detectcache:save()
     end
 
     -- ok?
@@ -74,12 +71,12 @@ function _check_from_arglist(flags, opt)
 end
 
 -- has_flags(flags)?
--- 
+--
 -- @param opt   the argument options, e.g. {toolname = "", program = "", programver = "", toolkind = "[cc|cxx|ld|ar|sh|gc|rc|dc|mm|mxx]"}
 --
 -- @return      true or false
 --
 function main(flags, opt)
-    return _check_from_arglist(flags, opt) 
+    return _check_from_arglist(flags, opt)
 end
 

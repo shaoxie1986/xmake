@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      OpportunityLiu
 -- @file        complete.lua
@@ -43,6 +43,11 @@ function _print_candidate(is_complate, ...)
 end
 
 function _find_candidates(candidates, find)
+
+    if type(candidates) ~= 'table' then
+        return {}
+    end
+
     local has_candidate = false
     local results = table.new(#candidates, 0)
 

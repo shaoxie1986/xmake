@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -20,9 +20,14 @@
 
 -- define rule: rust.build
 rule("rust.build")
-    set_sourcekinds("rc")    
+    set_sourcekinds("rc")
     on_build("build.target")
 
--- define rule: cpp
+-- define rule: rust
 rule("rust")
+
+    -- add build rules
     add_deps("rust.build")
+
+    -- inherit links and linkdirs of all dependent targets by default
+    add_deps("utils.inherit.links")

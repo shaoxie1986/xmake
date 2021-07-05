@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      OpportunityLiu
  * @file        ansi.c
@@ -29,7 +29,7 @@
  * includes
  */
 #include "ansi.h"
-#include <Windows.h>
+#include <windows.h>
 
 /* //////////////////////////////////////////////////////////////////////////////////////
  * implementation

@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        nvcc.lua
@@ -20,11 +20,13 @@
 
 -- imports
 import("core.base.option")
+import("core.base.global")
 import("core.project.config")
 import("core.project.project")
 import("core.platform.platform")
 import("core.language.language")
 import("private.tools.ccache")
+import("private.utils.progress")
 
 -- init it
 function init(self)
@@ -32,6 +34,7 @@ function init(self)
     -- init cuflags
     if not is_plat("windows", "mingw") then
         self:set("shared.cuflags", "-Xcompiler -fPIC")
+        self:set("binary.cuflags", "-Xcompiler -fPIE")
     end
 
     -- add -ccbin
@@ -105,6 +108,7 @@ function nf_warning(self, level)
     ,   less       = "-W1"
     ,   more       = "-W3"
     ,   all        = "-W3" -- = "-Wall" will enable too more warnings
+    ,   allextra   = "-W4"
     ,   everything = "-Wall"
     ,   error      = "-WX"
     }
@@ -120,6 +124,7 @@ function nf_warning(self, level)
     ,   less       = "-Wall"
     ,   more       = "-Wall"
     ,   all        = "-Wall"
+    ,   allextra   = "-Wall -Wextra"
     ,   everything = "-Weverything -Wall -Wextra -Weffc++"
     ,   error      = "-Werror"
     }
@@ -195,7 +200,12 @@ end
 
 -- make the includedir flag
 function nf_includedir(self, dir)
-    return "-I" .. os.args(dir)
+    return {"-I", dir}
+end
+
+-- make the sysincludedir flag
+function nf_sysincludedir(self, dir)
+    return nf_includedir(self, dir)
 end
 
 -- make the link flag
@@ -210,29 +220,29 @@ end
 
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-L" .. os.args(dir)
+    return {"-L", dir}
 end
 
 -- make the rpathdir flag
 function nf_rpathdir(self, dir)
     if self:has_flags("-Wl,-rpath=" .. dir, "ldflags") then
-        return "-Wl,-rpath=" .. os.args(dir:gsub("@[%w_]+", function (name)
+        return {"-Wl,-rpath=" .. (dir:gsub("@[%w_]+", function (name)
             local maps = {["@loader_path"] = "$ORIGIN", ["@executable_path"] = "$ORIGIN"}
             return maps[name]
-        end))
+        end))}
     elseif self:has_flags("-Xlinker -rpath -Xlinker " .. dir, "ldflags") then
-        return "-Xlinker -rpath -Xlinker " .. os.args(dir:gsub("%$ORIGIN", "@loader_path"))
+        return {"-Xlinker", "-rpath", "-Xlinker", (dir:gsub("%$ORIGIN", "@loader_path"))}
     end
 end
 
 -- make the c precompiled header flag
 function nf_pcheader(self, pcheaderfile, target)
-    return "-include " .. os.args(pcheaderfile)
+    return {"-include", pcheaderfile}
 end
 
 -- make the c++ precompiled header flag
 function nf_pcxxheader(self, pcheaderfile, target)
-    return "-include " .. os.args(pcheaderfile)
+    return {"-include", pcheaderfile}
 end
 
 -- make the link arguments list
@@ -250,7 +260,7 @@ function linkargv(self, objectfiles, targetkind, targetfile, flags)
     -- add `-Wl,--out-implib,outputdir/libxxx.a` for xxx.dll on mingw/gcc
     if targetkind == "shared" and config.plat() == "mingw" then
         table.insert(flags_extra, "-Xlinker")
-        table.insert(flags_extra, "-Wl,--out-implib," .. os.args(path.join(path.directory(targetfile), path.basename(targetfile) .. ".lib")))
+        table.insert(flags_extra, "-Wl,--out-implib," .. path.join(path.directory(targetfile), path.basename(targetfile) .. ".lib"))
     end
 
     -- make link args
@@ -259,21 +269,38 @@ end
 
 -- link the target file
 function link(self, objectfiles, targetkind, targetfile, flags)
-
-    -- ensure the target directory
     os.mkdir(path.directory(targetfile))
+    local program, argv = linkargv(self, objectfiles, targetkind, targetfile, flags)
+    os.runv(program, argv, {envs = self:runenvs()})
+end
 
-    -- link it
-    os.runv(linkargv(self, objectfiles, targetkind, targetfile, flags))
+-- support `-MMD -MF depfile.d`? some old gcc does not support it at same time
+function _has_flags_mmd_mf(self)
+    local has_mmd_mf = _g._HAS_MMD_MF
+    if has_mmd_mf == nil and not is_host("windows") then
+       has_mmd_mf = self:has_flags({"-MMD", "-MF", os.nuldev()}, "cuflags", { flagskey = "-MMD -MF" }) or false
+        _g._HAS_MMD_MF = has_mmd_mf
+    end
+    return has_mmd_mf
+end
+
+-- support `-MM -o depfile.d`?
+function _has_flags_mm(self)
+    local has_mm = _g._HAS_MM
+    if not has_mmd_mf and has_mm == nil and not is_host("windows") then
+        has_mm = self:has_flags("-MM", "cuflags", { flagskey = "-MM" }) or false
+        _g._HAS_MM = has_mm
+    end
+    return has_mm
 end
 
 -- make the compile arguments list
-function _compargv1(self, sourcefile, objectfile, flags)
+function compargv(self, sourcefile, objectfile, flags)
     return ccache.cmdargv(self:program(), table.join("-c", flags, "-o", objectfile, sourcefile))
 end
 
 -- compile the source file
-function _compile1(self, sourcefile, objectfile, dependinfo, flags)
+function compile(self, sourcefile, objectfile, dependinfo, flags)
 
     -- ensure the object directory
     os.mkdir(path.directory(objectfile))
@@ -283,19 +310,22 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
     try
     {
         function ()
-            -- support `-M -MF depfile.d`?
-            if depfile and _g._HAS_M_MF == nil then
-                _g._HAS_M_MF = self:has_flags({"-M", "-MF", os.nuldev()}, "cuflags", { flagskey = "-M -MF" }) or false
-            end
 
             -- generate includes file
-            if depfile and _g._HAS_M_MF then
-                -- since -MD is not supported, run nvcc twice
-                local compflags = table.join(flags, "-M", "-MF", depfile)
-                os.runv(_compargv1(self, sourcefile, objectfile, compflags))
+            local compflags = flags
+            if depfile then
+                if _has_flags_mmd_mf(self) then
+                    compflags = table.join(compflags, "-MMD", "-MF", depfile)
+                elseif _has_flags_mm(self) then
+                    -- since -MD is not supported, run nvcc twice
+                    local program, argv = compargv(self, sourcefile, depfile, table.join(flags, "-MM"))
+                    os.runv(program, argv, {envs = self:runenvs()})
+                end
             end
 
-            local outdata, errdata = os.iorunv(_compargv1(self, sourcefile, objectfile, flags))
+            -- do compile
+            local program, argv = compargv(self, sourcefile, objectfile, compflags)
+            local outdata, errdata = os.iorunv(program, argv, {envs = self:runenvs()})
             return (outdata or "") .. (errdata or "")
         end,
         catch
@@ -319,7 +349,7 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
                 -- get 16 lines of errors
                 if start > 0 or not option.get("verbose") then
                     if start == 0 then start = 1 end
-                    errors = table.concat(table.slice(lines, start, start + ifelse(#lines - start > 16, 16, #lines - start)), "\n")
+                    errors = table.concat(table.slice(lines, start, start + ((#lines - start > 16) and 16 or (#lines - start))), "\n")
                 end
 
                 -- raise compiling errors
@@ -331,13 +361,16 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
             function (ok, warnings)
 
                 -- print some warnings
-                if warnings and #warnings > 0 and (option.get("verbose") or option.get("warning")) then
+                if warnings and #warnings > 0 and (option.get("verbose") or option.get("warning") or global.get("build_warning")) then
+                    if progress.showing_without_scroll() then
+                        print("")
+                    end
                     cprint("${color.warning}%s", table.concat(table.slice(warnings:split('\n', {plain = true}), 1, 8), '\n'))
                 end
 
                 -- generate the dependent includes
                 if depfile and os.isfile(depfile) then
-                    if dependinfo and self:kind() ~= "as" then
+                    if dependinfo then
                         -- nvcc uses gcc-style depfiles
                         dependinfo.depfiles_gcc = io.readfile(depfile, {continuation = "\\"})
                     end
@@ -348,25 +381,5 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
             end
         }
     }
-end
-
--- make the compile arguments list
-function compargv(self, sourcefiles, objectfile, flags)
-
-    -- only support single source file now
-    assert(type(sourcefiles) ~= "table", "'object:sources' not support!")
-
-    -- for only single source file
-    return _compargv1(self, sourcefiles, objectfile, flags)
-end
-
--- compile the source file
-function compile(self, sourcefiles, objectfile, dependinfo, flags)
-
-    -- only support single source file now
-    assert(type(sourcefiles) ~= "table", "'object:sources' not support!")
-
-    -- for only single source file
-    _compile1(self, sourcefiles, objectfile, dependinfo, flags)
 end
 

@@ -11,23 +11,23 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_xcode.lua
 --
 
 -- imports
-import("lib.detect.cache")
 import("core.base.option")
 import("core.base.global")
 import("core.project.config")
+import("core.cache.detectcache")
 import("lib.detect.find_directory")
 import("private.tools.codesign")
 
 -- find xcode directory
-function _find_sdkdir(sdkdir)
+function _find_sdkdir(sdkdir, opt)
     if sdkdir and os.isdir(sdkdir) then
         return sdkdir
     end
@@ -35,9 +35,11 @@ function _find_sdkdir(sdkdir)
 end
 
 -- find the sdk version of xcode
-function _find_xcode_sdkver(sdkdir, plat, arch)
+function _find_xcode_sdkver(sdkdir, opt)
 
     -- select platform sdkdir
+    local plat = opt.plat
+    local arch = opt.arch
     local platsdkdir = nil
     if plat == "iphoneos" then
         if arch == "i386" or arch == "x86_64" then
@@ -50,6 +52,12 @@ function _find_xcode_sdkver(sdkdir, plat, arch)
             platsdkdir = "Contents/Developer/Platforms/WatchSimulator.platform/Developer/SDKs/WatchSimulator*.*.sdk"
         else
             platsdkdir = "Contents/Developer/Platforms/WatchOS.platform/Developer/SDKs/WatchOS*.*.sdk"
+        end
+    elseif plat == "appletvos" then
+        if arch == "i386" or arch == "x86_64" then
+            platsdkdir = "Contents/Developer/Platforms/AppleTVSimulator.platform/Developer/SDKs/AppleTVSimulator*.*.sdk"
+        else
+            platsdkdir = "Contents/Developer/Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS*.*.sdk"
         end
     else
         platsdkdir = "Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX*.*.sdk"
@@ -65,51 +73,74 @@ function _find_xcode_sdkver(sdkdir, plat, arch)
 end
 
 -- find the xcode toolchain
-function _find_xcode(sdkdir, xcode_sdkver, plat, arch)
+function _find_xcode(sdkdir, opt)
 
     -- find xcode root directory
-    sdkdir = _find_sdkdir(sdkdir)
+    sdkdir = _find_sdkdir(sdkdir, opt)
     if not sdkdir then
         return {}
     end
 
     -- find the sdk version
-    local sdkver = xcode_sdkver or _find_xcode_sdkver(sdkdir, plat, arch)
+    local sdkver = opt.sdkver or _find_xcode_sdkver(sdkdir, opt)
     if not sdkver then
         return {}
     end
 
-    -- find codesign identity
-    local codesign_identity = config.get("xcode_codesign_identity")
-    if codesign_identity == nil then -- we will disable codesign_identity if be false
-        codesign_identity = global.get("xcode_codesign_identity")
-    end
-    if codesign_identity == nil then
-        local codesign_identities = codesign.codesign_identities()
-        if codesign_identities then
-            for identity, _ in pairs(codesign_identities) do
-                codesign_identity = identity
-                break
+    -- find codesign
+    local codesign_identity, mobile_provision
+    if opt.find_codesign then
+
+        -- find codesign identity
+        codesign_identity = config.get("xcode_codesign_identity")
+        if codesign_identity == nil then -- we will disable codesign_identity if be false
+            codesign_identity = global.get("xcode_codesign_identity")
+        end
+        if codesign_identity == nil then
+            local codesign_identities = codesign.codesign_identities()
+            if codesign_identities then
+                for identity, _ in pairs(codesign_identities) do
+                    codesign_identity = identity
+                    break
+                end
+            end
+        end
+
+        -- find mobile provision only for iphoneos
+        if opt.plat == "iphoneos" then
+            local mobile_provisions = codesign.mobile_provisions()
+            if mobile_provisions then
+                mobile_provision = config.get("xcode_mobile_provision")
+                if mobile_provision == nil then -- we will disable mobile_provision if be false
+                    mobile_provision = global.get("xcode_mobile_provision")
+                end
+                if mobile_provision == nil then
+                    for provision, _ in pairs(mobile_provisions) do
+                        mobile_provision = provision
+                        break
+                    end
+                -- valid mobile provision not found? reset it
+                elseif not mobile_provisions[mobile_provision] then
+                    mobile_provision = nil
+                end
             end
         end
     end
-
-    -- ok?    
-    return {sdkdir = sdkdir, sdkver = sdkver, codesign_identity = codesign_identity}
+    return {sdkdir = sdkdir, sdkver = sdkver, codesign_identity = codesign_identity, mobile_provision = mobile_provision}
 end
 
 -- find xcode toolchain
 --
 -- @param sdkdir    the xcode directory
--- @param opt       the argument options 
---                  e.g. {verbose = true, force = false, sdkver = 19, toolchains_ver = "4.9"}  
+-- @param opt       the argument options
+--                  e.g. {verbose = true, force = false, sdkver = 19, find_codesign = true}
 --
 -- @return          the xcode toolchain. e.g. {bindir = .., cross = ..}
 --
--- @code 
+-- @code
 --
 -- local toolchain = find_xcode("/Applications/Xcode.app")
--- 
+--
 -- @endcode
 --
 function main(sdkdir, opt)
@@ -119,46 +150,21 @@ function main(sdkdir, opt)
 
     -- attempt to load cache first
     local key = "detect.sdks.find_xcode"
-    local cacheinfo = cache.load(key)
+    local cacheinfo = detectcache:get(key) or {}
     if not opt.force and cacheinfo.xcode and cacheinfo.xcode.sdkdir and os.isdir(cacheinfo.xcode.sdkdir) then
         return cacheinfo.xcode
     end
 
     -- get plat and arch
-    local plat = opt.plat or config.get("plat") or "macosx"
-    local arch = opt.arch or config.get("arch") or "x86_64"
+    local plat = opt.plat or config.get("plat") or os.host()
+    local arch = opt.arch or config.get("arch") or os.arch()
 
     -- find xcode
-    local xcode = _find_xcode(sdkdir or config.get("xcode") or global.get("xcode") or config.get("sdk"), opt.sdkver or config.get("xcode_sdkver"), plat, arch)
-    if xcode and xcode.sdkdir then
-
-        -- save to config
-        config.set("xcode", xcode.sdkdir, {force = true, readonly = true})
-        config.set("xcode_sdkver", xcode.sdkver, {force = true, readonly = true})
-        config.set("xcode_codesign_identity", xcode.codesign_identity, {force = true, readonly = true})
-
-        -- trace
-        if opt.verbose or option.get("verbose") then
-            cprint("checking for the Xcode directory ... ${color.success}%s", xcode.sdkdir)
-            cprint("checking for the SDK version of Xcode ... ${color.success}%s", xcode.sdkver)
-            if xcode.codesign_identity then
-                cprint("checking for the Codesign Identity of Xcode ... ${color.success}%s", xcode.codesign_identity)
-            else
-                cprint("checking for the Codesign Identity of Xcode ... ${color.nothing}${text.nothing}")
-            end
-        end
-    else
-
-        -- trace
-        if opt.verbose or option.get("verbose") then
-            cprint("checking for the Xcode directory ... ${color.nothing}${text.nothing}")
-        end
-    end
+    local xcode = _find_xcode(sdkdir or config.get("xcode") or global.get("xcode"), opt)
 
     -- save to cache
     cacheinfo.xcode = xcode or false
-    cache.save(key, cacheinfo)
-
-    -- ok?
+    detectcache:set(key, cacheinfo)
+    detectcache:save()
     return xcode
 end

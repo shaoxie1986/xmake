@@ -11,41 +11,39 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        inherit_links.lua
 --
 
--- add values from target options
-function _add_values_from_targetopts(values, target, name)
-    for _, opt in ipairs(target:orderopts()) do
-        table.join2(values, table.wrap(opt:get(name)))
-    end
-end
-
--- add values from target packages
-function _add_values_from_targetpkgs(values, target, name)
-    for _, pkg in ipairs(target:orderpkgs()) do
-        -- uses them instead of the builtin configs if exists extra package config
-        -- e.g. `add_packages("xxx", {links = "xxx"})`
-        local configinfo = target:pkgconfig(pkg:name())
-        if configinfo and configinfo[name] then
-            table.join2(values, configinfo[name])
-        else
-            -- uses the builtin package configs
-            table.join2(values, pkg:get(name))
-        end
-    end
-end
-
 -- get values from target
 function _get_values_from_target(target, name)
     local values = table.wrap(target:get(name))
-    _add_values_from_targetopts(values, target, name)
-    _add_values_from_targetpkgs(values, target, name)
+    table.join2(values, target:get_from_opts(name))
+    table.join2(values, target:get_from_pkgs(name))
     return values
+end
+
+-- @note we cannot directly set `{interface = true}`, because it will overwrite the previous configuration
+-- https://github.com/xmake-io/xmake/issues/1465
+function _add_export_value(target, name, value)
+    local has_private = false
+    local private_values = target:get(name)
+    if private_values then
+        for _, v in ipairs(private_values) do
+            if v == value then
+                has_private = true
+                break
+            end
+        end
+    end
+    if has_private then
+        target:add(name, value, {public = true})
+    else
+        target:add(name, value, {interface = true})
+    end
 end
 
 -- main entry
@@ -57,15 +55,35 @@ function main(target)
     end
 
     -- export links and linkdirs
-    local targetkind = target:targetkind()
+    local targetkind = target:kind()
     if targetkind == "shared" or targetkind == "static" then
         local targetfile = target:targetfile()
-        target:add("links", target:basename(), {interface = true})
-        target:add("linkdirs", path.directory(targetfile), {interface = true})
-        for _, name in ipairs({"frameworkdirs", "frameworks", "linkdirs", "links", "syslinks"}) do
-            local values = _get_values_from_target(target, name)
-            if values and #values > 0 then
-                target:add(name, unpack(values), {interface = true})
+
+        -- we need move target link to head
+        _add_export_value(target, "links", target:linkname())
+        local links = target:get("links", {rawref = true})
+        if links and type(links) == "table" and #links > 1 then
+            table.insert(links, 1, links[#links])
+            table.remove(links, #links)
+        end
+
+        _add_export_value(target, "linkdirs", path.directory(targetfile))
+        if target:rule("go") then
+            -- we need add includedirs to support import modules for golang
+            _add_export_value(target, "includedirs", path.directory(targetfile))
+        end
+
+        -- we export all links and linkdirs in self/packages/options to the parent target by default
+        --
+        -- @note we only export links for static target,
+        -- and we need pass `{public = true}` to add_packages/add_links/... to export it if want to export links for shared target
+        --
+        if targetkind == "static" then
+            for _, name in ipairs({"frameworkdirs", "frameworks", "linkdirs", "links", "syslinks"}) do
+                local values = _get_values_from_target(target, name)
+                if values and #values > 0 then
+                    target:add(name, values, {public = true})
+                end
             end
         end
     end
@@ -74,12 +92,15 @@ function main(target)
     if targetkind == "binary" then
         local targetdir = target:targetdir()
         for _, dep in ipairs(target:orderdeps()) do
-            local rpathdir = "@loader_path"
-            local subdir = path.relative(path.directory(dep:targetfile()), targetdir)
-            if subdir and subdir ~= '.' then
-                rpathdir = path.join(rpathdir, subdir)
+            local depinherit = target:extraconf("deps", dep:name(), "inherit")
+            if dep:kind() == "shared" and (depinherit == nil or depinherit) then
+                local rpathdir = "@loader_path"
+                local subdir = path.relative(path.directory(dep:targetfile()), targetdir)
+                if subdir and subdir ~= '.' then
+                    rpathdir = path.join(rpathdir, subdir)
+                end
+                target:add("rpathdirs", rpathdir)
             end
-            target:add("rpathdirs", rpathdir)
         end
     end
 end

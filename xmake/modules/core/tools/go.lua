@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        go.lua
@@ -25,9 +25,9 @@ import("core.project.project")
 
 -- init it
 function init(self)
-    
+
     -- init arflags
-    self:set("gc-arflags", "grc")
+    self:set("gcarflags", "grc")
 
     -- init the file formats
     self:set("formats", { static = "$(name).a" })
@@ -37,13 +37,13 @@ end
 function nf_optimize(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none = "-N"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the symbol flag
@@ -51,41 +51,46 @@ function nf_symbol(self, level, target, mapkind)
 
     -- only for compiler
     if mapkind ~= "object" then
-        return 
+        return
     end
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-E"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the strip flag
 function nf_strip(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-s"
     ,   all   = "-s"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the includedir flag
 function nf_includedir(self, dir)
-    return "-I " .. os.args(dir)
+    return {"-I", dir}
+end
+
+-- make the sysincludedir flag
+function nf_sysincludedir(self, dir)
+    return nf_includedir(self, dir)
 end
 
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-L " .. os.args(dir)
+    return {"-L", dir}
 end
 
 -- make the link arguments list
@@ -106,7 +111,8 @@ function link(self, objectfiles, targetkind, targetfile, flags)
     os.mkdir(path.directory(targetfile))
 
     -- link it
-    os.runv(linkargv(self, objectfiles, targetkind, targetfile, flags))
+    local program, argv = linkargv(self, objectfiles, targetkind, targetfile, flags)
+    os.runv(program, argv, {envs = self:runenvs()})
 end
 
 -- make the compile arguments list
@@ -121,6 +127,7 @@ function compile(self, sourcefiles, objectfile, dependinfo, flags)
     os.mkdir(path.directory(objectfile))
 
     -- compile it
-    os.runv(compargv(self, sourcefiles, objectfile, flags))
+    local program, argv = compargv(self, sourcefiles, objectfile, flags)
+    os.runv(program, argv, {envs = self:runenvs()})
 end
 

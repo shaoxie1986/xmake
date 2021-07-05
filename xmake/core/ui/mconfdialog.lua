@@ -11,20 +11,22 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        mconfdialog.lua
 --
 
 -- load modules
+local table        = require("base/table")
 local log          = require("ui/log")
 local rect         = require("ui/rect")
 local event        = require("ui/event")
 local action       = require("ui/action")
 local curses       = require("ui/curses")
 local window       = require("ui/window")
+local scrollbar    = require("ui/scrollbar")
 local menuconf     = require("ui/menuconf")
 local boxdialog    = require("ui/boxdialog")
 local textdialog   = require("ui/textdialog")
@@ -41,23 +43,41 @@ function mconfdialog:init(name, bounds, title)
     boxdialog.init(self, name, bounds, title)
 
     -- init text
-    self:text():text_set([[Arrow keys navigate the menu. <Enter> selects submenus ---> (or empty submenus ----). 
+    self:text():text_set([[Arrow keys navigate the menu. <Enter> selects submenus ---> (or empty submenus ----).
 Pressing <Y> includes, <N> excludes. Enter <Esc> or <Back> to go back, <?> for Help, </> for Search. Legend: [*] built-in  [ ] excluded
 ]])
 
     -- init buttons
-    self:button_add("select", "< Select >", function (v, e) self:menuconf():event_on(event.command {"cm_enter"}) end)
-    self:button_add("back", "< Back >", function (v, e) self:menuconf():event_on(event.command {"cm_back"}) end)
+    self:button_add("select", "< Select >", function (v, e) self:menuconf():on_event(event.command {"cm_enter"}) end)
+    self:button_add("back", "< Back >", function (v, e) self:menuconf():on_event(event.command {"cm_back"}) end)
     self:button_add("exit", "< Exit >", function (v, e) self:quit() end)
-    self:button_add("help", "< Help >", function (v, e) self:show_help() end) 
+    self:button_add("help", "< Help >", function (v, e) self:show_help() end)
     self:button_add("save", "< Save >", function (v, e) self:action_on(action.ac_on_save) end)
     self:buttons():select(self:button("select"))
 
+    -- insert scrollbar
+    self:box():panel():insert(self:scrollbar_menuconf())
+
     -- insert menu config
     self:box():panel():insert(self:menuconf())
+    self:box():panel():action_add(action.ac_on_resized, function (v)
+        local bounds = self:box():panel():bounds()
+        self:menuconf():bounds_set(rect:new(0, 0, bounds:width(), bounds:height()))
+    end)
 
     -- disable to select to box (disable Tab switch and only response to buttons)
     self:box():option_set("selectable", false)
+
+    -- on resize for panel
+    self:box():panel():action_add(action.ac_on_resized, function (v)
+        self:menuconf():bounds_set(rect:new(0, 0, v:width() - 1, v:height()))
+        self:scrollbar_menuconf():bounds_set(rect:new(v:width() - 1, 0, 1, v:height()))
+        if self:menuconf():scrollable() then
+            self:scrollbar_menuconf():show(true)
+        else
+            self:scrollbar_menuconf():show(false)
+        end
+    end)
 
     -- on selected
     self:menuconf():action_set(action.ac_on_selected, function (v, config)
@@ -89,6 +109,22 @@ Pressing <Y> includes, <N> excludes. Enter <Esc> or <Back> to go back, <?> for H
             return true
         end
     end)
+
+    -- show scrollbar?
+    self:menuconf():action_add(action.ac_on_load, function (v)
+        if v:scrollable() then
+            self:scrollbar_menuconf():show(true)
+        else
+            self:scrollbar_menuconf():show(false)
+        end
+    end)
+
+    -- on scroll
+    self:menuconf():action_add(action.ac_on_scrolled, function (v, progress)
+        if self:scrollbar_menuconf():state("visible") then
+            self:scrollbar_menuconf():progress_set(progress)
+        end
+    end)
 end
 
 -- load configs
@@ -106,10 +142,20 @@ end
 function mconfdialog:menuconf()
     if not self._MENUCONF then
         local bounds = self:box():panel():bounds()
-        self._MENUCONF = menuconf:new("mconfdialog.menuconf", rect:new(0, 0, bounds:width(), bounds:height()))
+        self._MENUCONF = menuconf:new("mconfdialog.menuconf", rect:new(0, 0, bounds:width() - 1, bounds:height()))
         self._MENUCONF:state_set("focused", true) -- we can select and highlight selected item
     end
     return self._MENUCONF
+end
+
+-- get menu scrollbar
+function mconfdialog:scrollbar_menuconf()
+    if not self._SCROLLBAR_MENUCONF then
+        local bounds = self:box():panel():bounds()
+        self._SCROLLBAR_MENUCONF = scrollbar:new("mconfdialog.scrollbar", rect:new(bounds:width() - 1, 0, 1, bounds:height()))
+        self._SCROLLBAR_MENUCONF:show(false)
+    end
+    return self._SCROLLBAR_MENUCONF
 end
 
 -- get help dialog
@@ -117,6 +163,7 @@ function mconfdialog:helpdialog()
     if not self._HELPDIALOG then
         local helpdialog = textdialog:new("mconfdialog.help", self:bounds(), "help")
         helpdialog:button_add("exit", "< Exit >", function (v) helpdialog:quit() end)
+        helpdialog:option_set("scrollable", true)
         self._HELPDIALOG = helpdialog
     end
     return self._HELPDIALOG
@@ -127,6 +174,7 @@ function mconfdialog:resultdialog()
     if not self._RESULTDIALOG then
         local resultdialog = textdialog:new("mconfdialog.result", self:bounds(), "result")
         resultdialog:button_add("exit", "< Exit >", function (v) resultdialog:quit() end)
+        resultdialog:option_set("scrollable", true)
         self._RESULTDIALOG = resultdialog
     end
     return self._RESULTDIALOG
@@ -135,11 +183,11 @@ end
 -- get input dialog
 function mconfdialog:inputdialog()
     if not self._INPUTDIALOG then
-        local dialog_input = inputdialog:new("mconfdialog.input", rect {0, 0, math.min(80, self:width() - 8), math.min(8, self:height())}, "input dialog")
+        local dialog_input = inputdialog:new("mconfdialog.input", rect{0, 0, math.min(80, self:width() - 8), math.min(8, self:height())}, "input dialog")
         dialog_input:background_set(self:frame():background())
         dialog_input:frame():background_set("cyan")
         dialog_input:textedit():option_set("multiline", false)
-        dialog_input:button_add("ok", "< Ok >", function (v) 
+        dialog_input:button_add("ok", "< Ok >", function (v)
             local config = dialog_input:extra("config")
             if config.kind == "string" then
                 config.value = dialog_input:textedit():text()
@@ -149,9 +197,9 @@ function mconfdialog:inputdialog()
                     config.value = value
                 end
             end
-            dialog_input:quit() 
+            dialog_input:quit()
         end)
-        dialog_input:button_add("cancel", "< Cancel >", function (v) 
+        dialog_input:button_add("cancel", "< Cancel >", function (v)
             dialog_input:quit()
         end)
         dialog_input:button_select("ok")
@@ -163,7 +211,7 @@ end
 -- get choice dialog
 function mconfdialog:choicedialog()
     if not self._CHOICEDIALOG then
-        local dialog_choice = choicedialog:new("mconfdialog.choice", rect {0, 0, math.min(80, self:width() - 8), math.min(20, self:height())}, "input dialog")
+        local dialog_choice = choicedialog:new("mconfdialog.choice", rect{0, 0, math.min(80, self:width() - 8), math.min(20, self:height())}, "input dialog")
         dialog_choice:background_set(self:frame():background())
         dialog_choice:frame():background_set("cyan")
         dialog_choice:box():frame():background_set("cyan")
@@ -175,12 +223,12 @@ end
 -- get search dialog
 function mconfdialog:searchdialog()
     if not self._SEARCHDIALOG then
-        local dialog_search = inputdialog:new("mconfdialog.input", rect {0, 0, math.min(80, self:width() - 8), math.min(8, self:height())}, "Search Configuration Parameter")
+        local dialog_search = inputdialog:new("mconfdialog.input", rect{0, 0, math.min(80, self:width() - 8), math.min(8, self:height())}, "Search Configuration Parameter")
         dialog_search:background_set(self:frame():background())
         dialog_search:frame():background_set("cyan")
         dialog_search:textedit():option_set("multiline", false)
         dialog_search:text():text_set("Enter (sub)string or lua pattern string to search for configuration")
-        dialog_search:button_add("ok", "< Ok >", function (v) 
+        dialog_search:button_add("ok", "< Ok >", function (v)
             local configs = self:search(self:configs(), dialog_search:textedit():text())
             local results = "Search('" .. dialog_search:textedit():text() .. "') results:"
             for _, config in ipairs(configs) do
@@ -189,7 +237,7 @@ function mconfdialog:searchdialog()
                     results = results .. "\nkind: " .. config.kind
                 end
                 if config.default then
-                    results = results .. "\ndefault: " .. config.default
+                    results = results .. "\ndefault: " .. tostring(config.default)
                 end
                 if config.path then
                     results = results .. "\npath: " .. config.path
@@ -200,9 +248,9 @@ function mconfdialog:searchdialog()
                 results = results .. "\n"
             end
             self:show_result(results)
-            dialog_search:quit() 
+            dialog_search:quit()
         end)
-        dialog_search:button_add("cancel", "< Cancel >", function (v) 
+        dialog_search:button_add("cancel", "< Cancel >", function (v)
             dialog_search:quit()
         end)
         dialog_search:button_select("ok")
@@ -232,7 +280,7 @@ function mconfdialog:show_help()
 
         -- get the current config item
         local item = self:menuconf():current()
-        
+
         -- get the current config
         local config = item:extra("config")
 
@@ -247,14 +295,16 @@ function mconfdialog:show_help()
         if config.kind then
             text = text .. "\ntype: " .. config.kind
         end
-        if config.default then
-            text = text .. "\ndefault: " .. tostring(config.default)
-        end
         if config.kind == "choice" then
+            if config.default and config.values[config.default] then
+                text = text .. "\ndefault: " .. config.values[config.default]
+            end
             text = text .. "\nvalues: "
             for _, value in ipairs(config.values) do
                 text = text .. "\n    - " .. value
             end
+        elseif config.default then
+            text = text .. "\ndefault: " .. tostring(config.default)
         end
         if config.path then
             text = text .. "\npath: " .. config.path
@@ -288,12 +338,12 @@ function mconfdialog:show_result(text)
 end
 
 -- on event
-function mconfdialog:event_on(e)
+function mconfdialog:on_event(e)
 
     -- select config
     if e.type == event.ev_keyboard then
         if e.key_name == "Down" or e.key_name == "Up" or e.key_name == " " or e.key_name == "Esc" or e.key_name:lower() == "y" or e.key_name:lower() == "n" then
-            return self:menuconf():event_on(e)
+            return self:menuconf():on_event(e)
         elseif e.key_name == "?" then
             self:show_help()
             return true
@@ -302,7 +352,31 @@ function mconfdialog:event_on(e)
             return true
         end
     end
-    return boxdialog.event_on(self, e) 
+    return boxdialog.on_event(self, e)
+end
+
+-- on resize
+function mconfdialog:on_resize()
+    if self._HELPDIALOG then
+        self:helpdialog():bounds_set(self:bounds())
+    end
+    if self._RESULTDIALOG then
+        self:resultdialog():bounds_set(self:bounds())
+        self:center(self:resultdialog(), {centerx = true, centery = true})
+    end
+    if self._INPUTDIALOG then
+        self:inputdialog():bounds_set(rect{0, 0, math.min(80, self:width() - 8), math.min(8, self:height())})
+        self:center(self:inputdialog(), {centerx = true, centery = true})
+    end
+    if self._CHOICEDIALOG then
+        self:choicedialog():bounds_set(rect{0, 0, math.min(80, self:width() - 8), math.min(20, self:height())})
+        self:center(self:choicedialog(), {centerx = true, centery = true})
+    end
+    if self._SEARCHDIALOG then
+        self:searchdialog():bounds_set(rect{0, 0, math.min(80, self:width() - 8), math.min(8, self:height())})
+        self:center(self:searchdialog(), {centerx = true, centery = true})
+    end
+    boxdialog.on_resize(self)
 end
 
 -- return module

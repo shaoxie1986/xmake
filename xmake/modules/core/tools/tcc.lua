@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        tcc.lua
@@ -20,6 +20,7 @@
 
 -- imports
 import("core.base.option")
+import("core.base.global")
 import("core.project.config")
 import("core.project.project")
 import("core.language.language")
@@ -28,15 +29,8 @@ import("private.tools.ccache")
 -- init it
 function init(self)
 
-    -- init mxflags
-    self:set("mxflags", "-fmessage-length=0"
-                      , "-pipe"
-                      , "-DIBOutlet=__attribute__((iboutlet))"
-                      , "-DIBOutletCollection(ClassName)=__attribute__((iboutletcollection(ClassName)))"
-                      , "-DIBAction=void)__attribute__((ibaction)")
-
     -- init shflags
-    self:set("shflags", "-shared")
+    self:set("shflags", "-shared", "-rdynamic")
 
     -- init cxflags for the kind: shared
     self:set("shared.cxflags", "-fPIC")
@@ -58,48 +52,36 @@ end
 
 -- make the strip flag
 function nf_strip(self, level)
-
-    -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-S"
     ,   all   = "-s"
     }
-
-    -- make it
     return maps[level]
 end
 
 -- make the symbol flag
 function nf_symbol(self, level)
-
-    -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug  = "-g"
     ,   hidden = "-fvisibility=hidden"
     }
-
-    -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the warning flag
 function nf_warning(self, level)
-
-    -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none       = "-w"
     ,   less       = "-W1"
     ,   more       = "-W3"
     ,   all        = "-Wall"
-    ,   extra      = "-Wunsupported"
-    ,   everything = "-Wall -Wunsupported -Wwrite-strings"
+    ,   allextra   = "-Wall -Wunsupported -Wwrite-strings -Wimplicit-function-declaration"
+    ,   everything = "-Wall -Wunsupported -Wwrite-strings -Wimplicit-function-declaration"
     ,   error      = "-Werror"
     }
-
-    -- make it
     return maps[level]
 end
 
@@ -115,7 +97,12 @@ end
 
 -- make the includedir flag
 function nf_includedir(self, dir)
-    return "-I" .. os.args(dir)
+    return {"-I" .. dir}
+end
+
+-- make the sysincludedir flag
+function nf_sysincludedir(self, dir)
+    return nf_includedir(self, dir)
 end
 
 -- make the link flag
@@ -130,12 +117,18 @@ end
 
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-L" .. os.args(dir)
+    return {"-L" .. dir}
 end
 
 -- make the link arguments list
 function linkargv(self, objectfiles, targetkind, targetfile, flags)
-    return self:program(), table.join("-o", targetfile, objectfiles, flags)
+    local argv
+    if targetkind == "static" then
+        argv = table.join("-ar", "cr", targetfile, objectfiles)
+    else
+        argv = table.join("-o", targetfile, objectfiles, flags)
+    end
+    return self:program(), argv
 end
 
 -- link the target file
@@ -186,7 +179,7 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
                 -- get 16 lines of errors
                 if start > 0 or not option.get("verbose") then
                     if start == 0 then start = 1 end
-                    errors = table.concat(table.slice(lines, start, start + ifelse(#lines - start > 16, 16, #lines - start)), "\n")
+                    errors = table.concat(table.slice(lines, start, start + ((#lines - start > 16) and 16 or (#lines - start))), "\n")
                 end
 
                 -- raise compiling errors
@@ -198,7 +191,7 @@ function _compile1(self, sourcefile, objectfile, dependinfo, flags)
             function (ok, warnings)
 
                 -- print some warnings
-                if warnings and #warnings > 0 and (option.get("verbose") or option.get("warning")) then
+                if warnings and #warnings > 0 and (option.get("verbose") or option.get("warning") or global.get("build_warning")) then
                     cprint("${color.warning}%s", table.concat(table.slice(warnings:split('\n'), 1, 8), '\n'))
                 end
             end

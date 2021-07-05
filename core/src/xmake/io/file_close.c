@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      OpportunityLiu, ruki
  * @file        file_close.c
@@ -41,7 +41,7 @@ tb_int_t xm_io_file_close(lua_State* lua)
     tb_assert_and_check_return_val(lua, 0);
 
     // is user data?
-    if (!lua_isuserdata(lua, 1)) 
+    if (!lua_isuserdata(lua, 1))
         xm_io_return_error(lua, "close(invalid file)!");
 
     // get file
@@ -65,6 +65,12 @@ tb_int_t xm_io_file_close(lua_State* lua)
         }
 #endif
 
+        // flush filter stream cache, TODO we should fix it in tbox/stream
+        if ((file->mode & TB_FILE_MODE_RW) == TB_FILE_MODE_RW && file->fstream)
+        {
+            if (!tb_stream_sync(file->file_ref, tb_false)) return tb_false;
+        }
+
         // close file
         tb_stream_clos(file->file_ref);
         file->file_ref = tb_null;
@@ -81,13 +87,25 @@ tb_int_t xm_io_file_close(lua_State* lua)
         tb_buffer_exit(&file->rcache);
         tb_buffer_exit(&file->wcache);
 
-        // exit file
-        tb_free(file);
+        // gc will free it if no any refs for lua_newuserdata()
+        // ...
 
         // ok
         lua_pushboolean(lua, tb_true);
         return 1;
     }
-    else xm_io_return_error(lua, "cannot close this file!");
+    else // for stdfile (gc/close)
+    {
+        // exit the line cache buffer
+        tb_buffer_exit(&file->rcache);
+        tb_buffer_exit(&file->wcache);
+
+        // gc will free it if no any refs for lua_newuserdata()
+        // ...
+
+        // ok
+        lua_pushboolean(lua, tb_true);
+        return 1;
+    }
 }
 

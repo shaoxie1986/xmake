@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        package.lua
@@ -27,8 +27,8 @@ local package    = require("package/package")
 local raise      = require("sandbox/modules/raise")
 
 -- get cache directory
-function sandbox_core_package_package.cachedir()
-    return package.cachedir()
+function sandbox_core_package_package.cachedir(opt)
+    return package.cachedir(opt)
 end
 
 -- the install directory
@@ -36,42 +36,35 @@ function sandbox_core_package_package.installdir()
     return package.installdir()
 end
 
--- load the package from the project file 
-function sandbox_core_package_package.load_from_project(packagename)
+-- the search directories
+function sandbox_core_package_package.searchdirs()
+    return package.searchdirs()
+end
 
-    -- load package instance 
-    local instance, errors = package.load_from_project(packagename, project) 
+-- load the package from the project file
+function sandbox_core_package_package.load_from_project(packagename)
+    local instance, errors = package.load_from_project(packagename, project)
     if errors then
         raise(errors)
     end
-
-    -- ok
     return instance
 end
 
--- load the package from the system 
+-- load the package from the system
 function sandbox_core_package_package.load_from_system(packagename)
-
-    -- load package instance 
-    local instance, errors = package.load_from_system(packagename) 
+    local instance, errors = package.load_from_system(packagename)
     if errors then
         raise(errors)
     end
-
-    -- ok
     return instance
 end
 
 -- load the package from repositories
 function sandbox_core_package_package.load_from_repository(packagename, repo, packagedir, packagefile)
-
-    -- load package instance
-    local instance, errors = package.load_from_repository(packagename, repo, packagedir, packagefile) 
+    local instance, errors = package.load_from_repository(packagename, repo, packagedir, packagefile)
     if not instance then
         raise(errors)
     end
-
-    -- ok
     return instance
 end
 

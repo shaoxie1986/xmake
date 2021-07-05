@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        build.lua
@@ -22,20 +22,20 @@
 import("core.base.option")
 import("core.project.config")
 import("core.project.project")
-import("core.platform.environment")
 import("private.async.jobpool")
 import("private.async.runjobs")
 import("core.base.hashset")
 
 -- clean target for rebuilding
 function _clean_target(target)
-    if not target:isphony() then
+    local targetkind = target:kind()
+    if targetkind ~= "phony" and targetkind ~= "object" then
         os.tryrm(target:symbolfile())
         os.tryrm(target:targetfile())
     end
 end
 
--- add builtin batch jobs 
+-- add builtin batch jobs
 function _add_batchjobs_builtin(batchjobs, rootjob, target)
 
     -- uses the rules script?
@@ -48,14 +48,14 @@ function _add_batchjobs_builtin(batchjobs, rootjob, target)
             else
                 job = batchjobs:addjob("rule/" .. r:name() .. "/build", function (index, total)
                     script(target, {progress = (index * 100) / total})
-                end, job or rootjob)
+                end, {rootjob = job or rootjob})
             end
         end
     end
 
     -- uses the builtin target script
-    if not job and not target:isphony() then
-        job, job_leaf = import("kinds." .. target:targetkind(), {anonymous = true})(batchjobs, rootjob, target)
+    if not job and not target:is_phony() then
+        job, job_leaf = import("kinds." .. target:kind(), {anonymous = true})(batchjobs, rootjob, target)
     end
     job = job or rootjob
     return job, job_leaf or job
@@ -69,14 +69,14 @@ function _add_batchjobs(batchjobs, rootjob, target)
     if not script then
         -- do builtin batch jobs
         job, job_leaf = _add_batchjobs_builtin(batchjobs, rootjob, target)
-    elseif target:extraconf("build", "batch") then 
+    elseif target:extraconf("build", "batch") then
         -- do custom batch script
-        -- e.g. 
+        -- e.g.
         -- target("test")
-        --     on_build(function (target, batchjobs, opt) 
+        --     on_build(function (target, batchjobs, opt)
         --         return batchjobs:addjob("test", function (idx, total)
         --             print("build it")
-        --         end, opt.rootjob)
+        --         end, {rootjob = opt.rootjob})
         --     end, {batch = true})
         --
         job, job_leaf = assert(script(target, batchjobs, {rootjob = rootjob}), "target(%s):on_build(): no returned job!", target:name())
@@ -85,27 +85,27 @@ function _add_batchjobs(batchjobs, rootjob, target)
         -- e.g.
         --
         -- target("test")
-        --     on_build(function (target, opt) 
+        --     on_build(function (target, opt)
         --         print("build it")
         --     end)
         --
         job = batchjobs:addjob(target:name() .. "/build", function (index, total)
             script(target, {progress = (index * 100) / total})
-        end, rootjob)
+        end, {rootjob = rootjob})
     end
     return job, job_leaf or job
 end
 
--- add batch jobs for the given target 
+-- add batch jobs for the given target
 function _add_batchjobs_for_target(batchjobs, rootjob, target)
 
     -- has been disabled?
-    if target:get("enabled") == false then
-        return 
+    if not target:is_enabled() then
+        return
     end
 
     -- add after_build job for target
-    local oldenvs = {}
+    local oldenvs
     local job_after_build = batchjobs:addjob(target:name() .. "/after_build", function (index, total)
 
         -- do after_build
@@ -120,27 +120,25 @@ function _add_batchjobs_for_target(batchjobs, rootjob, target)
                 after_build(target, {progress = progress})
             end
         end
-     
-        -- leave the environments of the target packages
-        for name, values in pairs(oldenvs) do
-            os.setenv(name, values)
+
+        -- restore environments
+        if oldenvs then
+            os.setenvs(oldenvs)
         end
-    end, rootjob)
+
+    end, {rootjob = rootjob})
 
     -- add batch jobs for target, @note only on_build script support batch jobs
     local job_build, job_build_leaf = _add_batchjobs(batchjobs, job_after_build, target)
 
     -- add before_build job for target
-    batchjobs:addjob(target:name() .. "/before_build", function (index, total)
+    local job_build_before = batchjobs:addjob(target:name() .. "/before_build", function (index, total)
 
-        -- enter the environments of the target packages
-        for name, values in pairs(target:pkgenvs()) do
-            oldenvs[name] = os.getenv(name)
-            os.addenv(name, unpack(values))
-        end
+        -- enter package environments
+        oldenvs = os.addenvs(target:pkgenvs())
 
         -- clean target if rebuild
-        if option.get("rebuild") then
+        if option.get("rebuild") and not option.get("dry-run") then
             _clean_target(target)
         end
 
@@ -156,8 +154,10 @@ function _add_batchjobs_for_target(batchjobs, rootjob, target)
                 before_build(target, {progress = progress})
             end
         end
-    end, job_build_leaf)
-    return job_build, job_after_build
+    end, {rootjob = job_build_leaf})
+
+    -- we need do build_before after all dependent targets if across_targets_in_parallel is disabled
+    return target:policy("build.across_targets_in_parallel") == false and job_build_before or job_build, job_after_build
 end
 
 -- add batch jobs for the given target and deps
@@ -166,11 +166,11 @@ function _add_batchjobs_for_target_and_deps(batchjobs, rootjob, jobrefs, target)
     if targetjob_ref then
         batchjobs:add(targetjob_ref, rootjob)
     else
-        local targetjob, targetjob_root = _add_batchjobs_for_target(batchjobs, rootjob, target) 
+        local targetjob, targetjob_root = _add_batchjobs_for_target(batchjobs, rootjob, target)
         if targetjob and targetjob_root then
             jobrefs[target:name()] = targetjob_root
             for _, depname in ipairs(target:get("deps")) do
-                _add_batchjobs_for_target_and_deps(batchjobs, targetjob, jobrefs, project.target(depname)) 
+                _add_batchjobs_for_target_and_deps(batchjobs, targetjob, jobrefs, project.target(depname))
             end
         end
     end
@@ -187,8 +187,7 @@ function get_batchjobs(targetname)
         local depset = hashset.new()
         local targets = {}
         for _, target in pairs(project.targets()) do
-            local default = target:get("default")
-            if default == nil or default == true or option.get("all") then
+            if target:is_default() or option.get("all") then
                 for _, depname in ipairs(target:get("deps")) do
                     depset:insert(depname)
                 end
@@ -217,9 +216,14 @@ function main(targetname)
     -- build all jobs
     local batchjobs = get_batchjobs(targetname)
     if batchjobs and batchjobs:size() > 0 then
-        environment.enter("toolchains")
-        runjobs("build", batchjobs, {comax = option.get("jobs") or 1})
-        environment.leave("toolchains")
+        local curdir = os.curdir()
+        runjobs("build", batchjobs, {comax = option.get("jobs") or 1, on_exit = function (errors)
+            import("private.utils.progress")
+            if errors and progress.showing_without_scroll() then
+                print("")
+            end
+        end, curdir = curdir, count_as_index = true})
+        os.cd(curdir)
     end
 end
 

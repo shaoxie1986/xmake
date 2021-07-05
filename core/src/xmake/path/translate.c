@@ -11,8 +11,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ *
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        translate.c
@@ -38,7 +38,7 @@ tb_int_t xm_path_translate(lua_State* lua)
     // check
     tb_assert_and_check_return_val(lua, 0);
 
-    // get the path 
+    // get the path
     tb_char_t const* path = luaL_checkstring(lua, 1);
     tb_check_return_val(path, 0);
 
@@ -46,9 +46,9 @@ tb_int_t xm_path_translate(lua_State* lua)
     tb_char_t data[TB_PATH_MAXN];
     tb_strlcpy(data, path, sizeof(data));
 
-    // done path:translate() 
-    lua_pushstring(lua, tb_path_translate(data, 0, sizeof(data) - 1)? data : tb_null);
-
-    // ok
+    // do path:translate()
+    tb_size_t size = tb_path_translate(data, 0, sizeof(data) - 1);
+    if (size) lua_pushlstring(lua, data, (size_t)size);
+    else lua_pushnil(lua);
     return 1;
 }

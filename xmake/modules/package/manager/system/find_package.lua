@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_package.lua
@@ -22,13 +22,13 @@
 import("lib.detect.find_file")
 import("lib.detect.find_path")
 import("lib.detect.find_library")
-import("lib.detect.pkg_config")
+import("lib.detect.pkgconfig")
 import("detect.sdks.find_xcode")
 import("core.project.config")
 
 -- find package from the unix-like system directories
 function _find_package_from_unixdirs(name, links, opt)
-      
+
     -- add default search includedirs on pc host
     local includedirs = table.wrap(opt.includedirs)
     if #includedirs == 0 then
@@ -57,7 +57,7 @@ function _find_package_from_unixdirs(name, links, opt)
         end
     end
 
-    -- find library 
+    -- find library
     local result = nil
     for _, link in ipairs(links) do
         local libinfo = find_library(link, linkdirs)
@@ -97,7 +97,7 @@ function _find_package_from_xcodedirs(name, links, opt)
     -- find xcode first
     local xcode = find_xcode(config.get("xcode"), {plat = opt.plat, arch = opt.arch})
     if not xcode then
-        return 
+        return
     end
 
     -- get sdk root directory
@@ -115,7 +115,7 @@ function _find_package_from_xcodedirs(name, links, opt)
     local linkdirs    = {path.join(sdk_rootdir, "usr", "lib")}
     local includedirs = {path.join(sdk_rootdir, "usr", "include")}
 
-    -- find library 
+    -- find library
     local result = nil
     for _, link in ipairs(links) do
         if find_file("lib" .. link .. ".tbd", linkdirs) then
@@ -148,7 +148,7 @@ function main(name, opt)
     local version = nil
     local links = table.wrap(opt.links)
     if #links == 0 then
-        pkginfo = pkg_config.libinfo(name)
+        pkginfo = pkgconfig.libinfo(name)
         if pkginfo then
             links = table.wrap(pkginfo.links)
             version = pkginfo.version

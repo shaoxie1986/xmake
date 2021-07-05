@@ -1,11 +1,11 @@
-import("detect.sdks.find_vstudio")
 import("core.project.config")
 import("core.platform.platform")
-import("core.platform.environment")
+import("core.tool.toolchain")
+import("lib.detect.find_tool")
 
 function test_vsxmake(t)
 
-    if os.subhost() ~= "windows" then
+    if not is_subhost("windows") then
         return t:skip("wrong host platform")
     end
 
@@ -21,12 +21,10 @@ function test_vsxmake(t)
     -- set config
     local arch = os.getenv("platform") or "x86"
     config.set("arch", arch, {readonly = true, force = true})
-    config.check()
-    platform.load(config.plat())
-    local vs = config.get("vs")
-    environment.enter("toolchains")
+    platform.load(config.plat(), arch):check()
 
     -- create sln & vcxproj
+    local vs = config.get("vs")
     local vstype = "vsxmake" .. vs
     os.execv("xmake", {"project", "-k", vstype, "-a", arch})
     os.cd(vstype)
@@ -35,22 +33,23 @@ function test_vsxmake(t)
     try
     {
         function ()
-            os.exec("msbuild /P:XmakeDiagnosis=true /P:XmakeVerbose=true")
+            local runenvs = toolchain.load("msvc"):runenvs()
+            local msbuild = find_tool("msbuild", {envs = runenvs})
+            os.execv(msbuild.program, {"/P:XmakeDiagnosis=true", "/P:XmakeVerbose=true"}, {envs = runenvs})
         end,
         catch
         {
             function ()
-                io.write("--- sln file ---\n")
-                io.cat(projname .. "_" .. vstype .. ".sln")
-                io.write("--- vcx file ---\n")
+                print("--- sln file ---")
+                io.cat(projname .. ".sln")
+                print("--- vcx file ---")
                 io.cat(projname .. "/" .. projname .. ".vcxproj")
-                io.write("--- filter file ---\n")
+                print("--- filter file ---")
                 io.cat(projname .. "/" .. projname .. ".vcxproj.filters")
                 raise("msbuild failed")
             end
         }
     }
-    environment.leave("toolchains")
 
     -- clean up
     os.cd(os.scriptdir())

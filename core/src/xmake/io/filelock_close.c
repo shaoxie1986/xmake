@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        filelock_close.c
@@ -40,12 +40,12 @@ tb_int_t xm_io_filelock_close(lua_State* lua)
     // check
     tb_assert_and_check_return_val(lua, 0);
 
-    // is user data?
-    if (!lua_isuserdata(lua, 1)) 
+    // check lock?
+    if (!xm_lua_ispointer(lua, 1))
         return 0;
 
     // get lock
-    tb_filelock_ref_t lock = (tb_filelock_ref_t)lua_touserdata(lua, 1);
+    tb_filelock_ref_t lock = (tb_filelock_ref_t)xm_lua_topointer(lua, 1);
     tb_check_return_val(lock, 0);
 
     // exit lock

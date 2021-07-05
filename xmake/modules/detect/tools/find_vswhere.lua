@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_vswhere.lua
@@ -49,7 +49,7 @@ function main(opt)
     -- find program
     opt.check   = opt.check or "-?"
     opt.command = opt.command or "-?"
-    opt.pathes = opt.pathes or
+    opt.paths   = opt.paths or
     {
         "$(env ProgramFiles%(x86%))\\Microsoft Visual Studio\\Installer",
         "$(env ProgramFiles)\\Microsoft Visual Studio\\Installer"

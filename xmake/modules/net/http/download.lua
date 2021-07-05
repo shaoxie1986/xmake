@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        download.lua
@@ -21,6 +21,7 @@
 -- imports
 import("core.base.option")
 import("lib.detect.find_tool")
+import("net.proxy")
 
 -- get user agent
 function _get_user_agent()
@@ -38,7 +39,7 @@ function _get_user_agent()
             if osver then
                 os_user_agent = ("Intel Mac OS X " .. (osver or "")):trim()
             end
-        elseif is_host("linux", "msys", "cygwin") then
+        elseif is_subhost("linux", "msys", "cygwin") then
             local osver = try { function () return os.iorun("uname -r") end }
             if osver then
                 os_user_agent = (os_user_agent .. " " .. (osver or "")):trim()
@@ -52,7 +53,7 @@ function _get_user_agent()
 end
 
 -- download url using curl
-function _curl_download(tool, url, outputfile)
+function _curl_download(tool, url, outputfile, opt)
 
     -- set basic arguments
     local argv = {}
@@ -60,6 +61,13 @@ function _curl_download(tool, url, outputfile)
         table.insert(argv, "-SL")
     else
         table.insert(argv, "-fsSL")
+    end
+
+    -- use proxy?
+    local proxy_conf = proxy.config(url)
+    if proxy_conf then
+        table.insert(argv, "-x")
+        table.insert(argv, proxy_conf)
     end
 
     -- set user-agent
@@ -70,6 +78,12 @@ function _curl_download(tool, url, outputfile)
         end
         table.insert(argv, "-A")
         table.insert(argv, user_agent)
+    end
+
+    -- continue to download?
+    if opt.continue then
+        table.insert(argv, "-C")
+        table.insert(argv, "-")
     end
 
     -- set url
@@ -90,13 +104,30 @@ function _curl_download(tool, url, outputfile)
 end
 
 -- download url using wget
-function _wget_download(tool, url, outputfile)
+function _wget_download(tool, url, outputfile, opt)
 
     -- ensure output directory
     local argv = {url}
     local outputdir = path.directory(outputfile)
     if not os.isdir(outputdir) then
         os.mkdir(outputdir)
+    end
+
+    -- use proxy?
+    local proxy_conf = proxy.config(url)
+    if proxy_conf then
+        table.insert(argv, "-e")
+        table.insert(argv, "use_proxy=yes")
+        table.insert(argv, "-e")
+        if url:startswith("http://") then
+            table.insert(argv, "http_proxy=" .. proxy_conf)
+        elseif url:startswith("https://") then
+            table.insert(argv, "https_proxy=" .. proxy_conf)
+        elseif url:startswith("ftp://") then
+            table.insert(argv, "ftp_proxy=" .. proxy_conf)
+        else
+            table.insert(argv, "http_proxy=" .. proxy_conf)
+        end
     end
 
     -- set user-agent
@@ -107,6 +138,11 @@ function _wget_download(tool, url, outputfile)
         end
         table.insert(argv, "-U")
         table.insert(argv, user_agent)
+    end
+
+    -- continue to download?
+    if opt.continue then
+        table.insert(argv, "-c")
     end
 
     -- set outputfile
@@ -121,22 +157,24 @@ end
 --
 -- @param url           the input url
 -- @param outputfile    the output file
+-- @param opt           the option, {continue = true}
 --
 --
-function main(url, outputfile)
+function main(url, outputfile, opt)
 
     -- init output file
+    opt = opt or {}
     outputfile = outputfile or path.filename(url):gsub("%?.+$", "")
-    
+
     -- attempt to download url using curl first
     local tool = find_tool("curl", {version = true})
     if tool then
-        return _curl_download(tool, url, outputfile)
+        return _curl_download(tool, url, outputfile, opt)
     end
 
     -- download url using wget
     tool = find_tool("wget", {version = true})
     if tool then
-        return _wget_download(tool, url, outputfile)
+        return _wget_download(tool, url, outputfile, opt)
     end
 end

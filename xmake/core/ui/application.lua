@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        application.lua
@@ -60,7 +60,7 @@ function application:exit()
     log:flush()
 end
 
--- get menubar 
+-- get menubar
 function application:menubar()
     if not self._MENUBAR then
         self._MENUBAR = menubar:new("menubar", rect{0, 0, self:width(), 1})
@@ -85,11 +85,19 @@ function application:statusbar()
 end
 
 -- on event
-function application:event_on(e)
-    program.event_on(self, e)
+function application:on_event(e)
+    program.on_event(self, e)
 end
 
--- run application 
+-- on resize
+function application:on_resize()
+    self:menubar():bounds_set(rect{0, 0, self:width(), 1})
+    self:desktop():bounds_set(rect{0, 1, self:width(), self:height() - 1})
+    self:statusbar():bounds_set(rect{0, self:height() - 1, self:width(), self:height()})
+    program.on_resize(self)
+end
+
+-- run application
 function application:run(...)
 
     -- init runner

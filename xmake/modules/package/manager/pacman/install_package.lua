@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        install_package.lua
@@ -41,14 +41,19 @@ function main(name, opt)
         raise("pacman not found!")
     end
 
+    -- for msys2/mingw? mingw-w64-[i686|x86_64]-xxx
+    if opt.plat == "mingw" then
+        name = (opt.arch == "x86_64" and "mingw-w64-x86_64-" or "mingw-w64-i686-") .. name
+    end
+
     -- init argv
-    local argv = {"-Sy", "--noconfirm", "--needed", opt.pacman or name}
+    local argv = {"-Sy", "--noconfirm", "--needed", "--disable-download-timeout", opt.pacman or name}
     if opt.verbose or option.get("verbose") then
         table.insert(argv, "--verbose")
     end
 
     -- install package directly if the current user is root
-    if os.isroot() then
+    if is_subhost("msys") or os.isroot() then
         os.vrunv(pacman.program, argv)
     -- install with administrator permission?
     elseif sudo.has() then

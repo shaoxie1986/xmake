@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        update.lua
@@ -22,16 +22,16 @@
 import("core.base.option")
 import("lib.detect.find_tool")
 
--- update submodule 
+-- update submodule
 --
--- @param opt       the argument options, e.g. repodir, init, remote, force, checkout, merge, rebase, recursive, reference, pathes
+-- @param opt       the argument options, e.g. repodir, init, remote, force, checkout, merge, rebase, recursive, reference, paths
 --
 -- @code
 --
 -- import("devel.git.submodule")
--- 
--- submodule.update("master", {repodir = "/tmp/xmake", init = true, remote = true})
--- submodule.update("v1.0.1", {repodir = "/tmp/xmake", recursive = true, reference = "xxx", pathes = "xxx"})
+--
+-- submodule.update({repodir = "/tmp/xmake", init = true, remote = true})
+-- submodule.update({repodir = "/tmp/xmake", recursive = true, longpaths = true, reference = "xxx", paths = "xxx"})
 --
 -- @endcode
 --
@@ -54,8 +54,8 @@ function main(opt)
         table.insert(argv, "--reference")
         table.insert(argv, opt.reference)
     end
-    if opt.pathes then
-        table.join2(argv, opt.pathes)
+    if opt.paths then
+        table.join2(argv, opt.paths)
     end
 
     -- enter repository directory
@@ -64,8 +64,28 @@ function main(opt)
         oldir = os.cd(opt.repodir)
     end
 
+    -- enable long paths
+    local longpaths_old
+    local longpaths_changed = false
+    if opt.longpaths then
+        local longpaths_old = try {function () return os.iorunv(git.program, {"config", "--get", "--global", "core.longpaths"}) end}
+        if not longpaths_old or not longpaths_old:find("true") then
+            os.vrunv(git.program, {"config", "--global", "core.longpaths", "true"})
+            longpaths_changed = true
+        end
+    end
+
     -- submodule it
     os.vrunv(git.program, argv)
+
+    -- restore old long paths configuration
+    if longpaths_changed then
+        if longpaths_old and longpaths_old:find("false") then
+            os.vrunv(git.program, {"config", "--global", "core.longpaths", "false"})
+        else
+            os.vrunv(git.program, {"config", "--global", "--unset", "core.longpaths"})
+        end
+    end
 
     -- leave repository directory
     if oldir then

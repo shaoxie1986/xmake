@@ -11,20 +11,20 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        has_flags.lua
 --
 
 -- imports
-import("lib.detect.cache")
+import("core.cache.detectcache")
 import("core.language.language")
 
 -- is linker?
 function _islinker(flags, opt)
-  
+
     -- the flags is "-Wl,<arg>"?
     local flags_str = table.concat(flags, " ")
     if flags_str:startswith("-Wl,") then
@@ -36,7 +36,7 @@ function _islinker(flags, opt)
     return toolkind == "ld" or toolkind == "sh"
 end
 
--- try running 
+-- try running
 function _try_running(...)
 
     local argv = {...}
@@ -49,7 +49,7 @@ function _check_from_arglist(flags, opt, islinker)
 
     -- only for compiler
     if islinker or #flags > 1 then
-        return 
+        return
     end
 
     -- make cache key
@@ -58,11 +58,8 @@ function _check_from_arglist(flags, opt, islinker)
     -- make flags key
     local flagskey = opt.program .. "_" .. (opt.programver or "")
 
-    -- load cache
-    local cacheinfo  = cache.load(key)
-
     -- get all flags from argument list
-    local allflags = cacheinfo[flagskey]
+    local allflags = detectcache:get2(key, flagskey)
     if not allflags then
 
         -- get argument list
@@ -75,11 +72,9 @@ function _check_from_arglist(flags, opt, islinker)
         end
 
         -- save cache
-        cacheinfo[flagskey] = allflags
-        cache.save(key, cacheinfo)
+        detectcache:set2(key, flagskey, allflags)
+        detectcache:save()
     end
-
-    -- ok?
     return allflags[flags[1]]
 end
 
@@ -107,7 +102,7 @@ function _check_try_running(flags, opt, islinker)
 end
 
 -- has_flags(flags)?
--- 
+--
 -- @param opt   the argument options, e.g. {toolname = "", program = "", programver = "", toolkind = "[cc|cxx|ld|ar|sh|gc|mm|mxx]"}
 --
 -- @return      true or false

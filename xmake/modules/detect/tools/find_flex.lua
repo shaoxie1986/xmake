@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_flex.lua
@@ -22,24 +22,24 @@
 import("lib.detect.find_program")
 import("lib.detect.find_programver")
 
--- find flex 
+-- find flex
 --
 -- @param opt   the argument options, e.g. {version = true}
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local flex = find_flex()
 -- local flex, version = find_flex({version = true})
--- 
+--
 -- @endcode
 --
 function main(opt)
 
     -- init options
     opt = opt or {}
-    
+
     -- find program
     local program = find_program(opt.program or "flex", opt)
 

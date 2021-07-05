@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        object.lua
@@ -25,6 +25,7 @@ import("core.tool.compiler")
 import("core.project.depend")
 import("private.tools.ccache")
 import("private.async.runjobs")
+import("private.utils.progress")
 
 -- do build file
 function _do_build_file(target, sourcefile, opt)
@@ -33,23 +34,25 @@ function _do_build_file(target, sourcefile, opt)
     local objectfile = opt.objectfile
     local dependfile = opt.dependfile
     local sourcekind = opt.sourcekind
-    local progress   = opt.progress
 
-    -- load compiler 
+    -- load compiler
     local compinst = compiler.load(sourcekind, {target = target})
 
     -- get compile flags
     local compflags = compinst:compflags({target = target, sourcefile = sourcefile, configs = opt.configs})
 
-    -- load dependent info 
+    -- load dependent info
     local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
-    
+
+    -- dry run?
+    local dryrun = option.get("dry-run")
+
     -- need build this object?
     -- @note we use mtime(dependfile) instead of mtime(objectfile) to ensure the object file is is fully compiled.
     -- @see https://github.com/xmake-io/xmake/issues/748
     local depvalues = {compinst:program(), compflags}
-    if not depend.is_changed(dependinfo, {lastmtime = os.mtime(dependfile), values = depvalues}) then
-        return 
+    if not dryrun and not depend.is_changed(dependinfo, {lastmtime = os.mtime(dependfile), values = depvalues}) then
+        return
     end
 
     -- is verbose?
@@ -60,29 +63,25 @@ function _do_build_file(target, sourcefile, opt)
 
     -- trace progress info
     if not opt.quiet then
-        local progress_prefix = "${color.build.progress}" .. theme.get("text.build.progress_format") .. ":${clear} "
-        if verbose then
-            cprint(progress_prefix .. "${dim color.build.object}%scompiling.$(mode) %s", progress, exists_ccache and "ccache " or "", sourcefile)
-        else
-            cprint(progress_prefix .. "${color.build.object}%scompiling.$(mode) %s", progress, exists_ccache and "ccache " or "", sourcefile)
-        end
+        progress.show(opt.progress, "${color.build.object}%scompiling.$(mode) %s", exists_ccache and "ccache " or "", sourcefile)
     end
 
     -- trace verbose info
     if verbose then
-        print(compinst:compcmd(sourcefile, objectfile, {compflags = compflags}))
+        -- show the full link command with raw arguments, it will expand @xxx.args for msvc/link on windows
+        print(compinst:compcmd(sourcefile, objectfile, {compflags = compflags, rawargs = true}))
     end
+    if not dryrun then
 
-    -- compile it 
-    dependinfo.files = {}
-    if not option.get("dry-run") then
+        -- do compile
+        dependinfo.files = {}
         assert(compinst:compile(sourcefile, objectfile, {dependinfo = dependinfo, compflags = compflags}))
-    end
 
-    -- update files and values to the dependent file
-    dependinfo.values = depvalues
-    table.join2(dependinfo.files, sourcefile, target:pcoutputfile("cxx") or {}, target:pcoutputfile("c"))
-    depend.save(dependinfo, dependfile)
+        -- update files and values to the dependent file
+        dependinfo.values = depvalues
+        table.join2(dependinfo.files, sourcefile, target:pcoutputfile("cxx") or {}, target:pcoutputfile("c"))
+        depend.save(dependinfo, dependfile)
+    end
 end
 
 -- build object
@@ -115,6 +114,6 @@ function main(target, batchjobs, sourcebatch, opt)
         batchjobs:addjob(sourcefile, function (index, total)
             local build_opt = table.join({objectfile = objectfile, dependfile = dependfile, sourcekind = sourcekind, progress = (index * 100) / total}, opt)
             _build_object(target, sourcefile, build_opt)
-        end, rootjob)
+        end, {rootjob = rootjob})
     end
 end

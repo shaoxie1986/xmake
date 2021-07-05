@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        vs200x_vcproj.lua
@@ -70,7 +70,7 @@ end
 function _make_linkflags(target, vcprojdir)
 
     -- make the linking flags
-    local linkflags = linker.linkflags(target:targetkind(), target:sourcekinds(), {target = target})
+    local linkflags = linker.linkflags(target:kind(), target:sourcekinds(), {target = target})
 
     -- replace -libpath:dir or /libpath:dir, -pdb:symbol.pdb or /pdb:symbol.pdb
     local flags = {}
@@ -201,12 +201,12 @@ end
 function _make_VCLinkerTool(vcprojfile, vsinfo, target, vcprojdir)
 
     -- need not linker?
-    local kind = target:targetkind()
+    local kind = target:kind()
     if kind ~= "binary" and kind ~= "shared" then
         vcprojfile:enter("<Tool")
             vcprojfile:print("Name=\"VCLinkerTool\"")
         vcprojfile:leave("/>")
-        return 
+        return
     end
 
     -- generate debug infomation?
@@ -248,7 +248,7 @@ function _make_configurations(vcprojfile, vsinfo, target, vcprojdir)
     ,   shared = 2
     ,   static = 4
     }
- 
+
     -- save compiler flags
     local compflags=nil
     for _, sourcebatch in pairs(target:sourcebatches()) do
@@ -292,7 +292,7 @@ function _make_configurations(vcprojfile, vsinfo, target, vcprojdir)
             vcprojfile:print("Name=\"$(mode)|Win32\"")
 			vcprojfile:print("OutputDirectory=\"%s\"", path.relative(path.absolute(target:targetdir()), vcprojdir))
 			vcprojfile:print("IntermediateDirectory=\"%s\"", path.relative(path.absolute(target:objectdir()), vcprojdir))
-			vcprojfile:print("ConfigurationType=\"%d\"", assert(configuration_types[target:targetkind()]))
+			vcprojfile:print("ConfigurationType=\"%d\"", assert(configuration_types[target:kind()]))
             vcprojfile:print("CharacterSet=\"%d\"", unicode and 1 or 2) -- mbc: 2, wcs: 1
             vcprojfile:print("UseOfMFC=\"%d\"", usemfc)
             vcprojfile:print(">")
@@ -524,7 +524,7 @@ function _make_files(vcprojfile, vsinfo, target, vcprojdir)
 
     -- enter files
     vcprojfile:enter("<Files>")
-        local sourcebatches = target:sourcebatches()        
+        local sourcebatches = target:sourcebatches()
         -- c/cxx files
         vcprojfile:enter("<Filter Name=\"Source Files\">")
             for _, sourcebatch in pairs(sourcebatches) do
@@ -532,7 +532,7 @@ function _make_files(vcprojfile, vsinfo, target, vcprojdir)
                 if sourcekind ~= "mrc" then
                     local objectfiles = sourcebatch.objectfiles
                     for idx, sourcefile in ipairs(sourcebatch.sourcefiles) do
-                        _make_cxfile(vcprojfile, vsinfo, target, sourcefile, objectfiles[idx], vcprojdir) 
+                        _make_cxfile(vcprojfile, vsinfo, target, sourcefile, objectfiles[idx], vcprojdir)
                     end
                 end
             end
@@ -547,7 +547,7 @@ function _make_files(vcprojfile, vsinfo, target, vcprojdir)
                 if sourcekind == "mrc" then
                     local objectfiles = sourcebatch.objectfiles
                     for idx, sourcefile in ipairs(sourcebatch.sourcefiles) do
-                        _make_rcfile(vcprojfile, vsinfo, target, sourcefile, objectfiles[idx], vcprojdir) 
+                        _make_rcfile(vcprojfile, vsinfo, target, sourcefile, objectfiles[idx], vcprojdir)
                     end
                 end
             end

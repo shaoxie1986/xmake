@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        swiftc.lua
@@ -24,7 +24,7 @@ import("private.tools.ccache")
 
 -- init it
 function init(self)
-    
+
     -- init flags map
     self:set("mapflags",
     {
@@ -61,8 +61,8 @@ end
 function nf_strip(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-Xlinker -S"
     ,   all   = "-Xlinker -s"
     }
@@ -75,8 +75,8 @@ end
 function nf_symbol(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-g"
     }
 
@@ -88,8 +88,8 @@ end
 function nf_warning(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none       = "-suppress-warnings"
     ,   less       = "-warn-swift3-objc-inference-minimal"
     ,   more       = "-warn-swift3-objc-inference-minimal"
@@ -99,15 +99,15 @@ function nf_warning(self, level)
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the optimize flag
 function nf_optimize(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none        = "-Onone"
     ,   fast        = "-O"
     ,   faster      = "-O"
@@ -124,8 +124,8 @@ end
 function nf_vectorext(self, extension)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         mmx   = "-mmmx"
     ,   sse   = "-msse"
     ,   sse2  = "-msse2"
@@ -140,29 +140,24 @@ function nf_vectorext(self, extension)
     return maps[extension]
 end
 
--- make the includedir flag
-function nf_includedir(self, dir)
-    return "-Xcc -I" .. os.args(dir)
-end
-
 -- make the define flag
 function nf_define(self, macro)
-    return "-Xcc -D" .. macro
+    return {"-Xcc", "-D" .. macro}
 end
 
 -- make the undefine flag
 function nf_undefine(self, macro)
-    return "-Xcc -U" .. macro
+    return {"-Xcc", "-U" .. macro}
 end
 
 -- make the framework flag
 function nf_framework(self, framework)
-    return "-framework " .. framework
+    return {"-framework", framework}
 end
 
 -- make the frameworkdir flag
 function nf_frameworkdir(self, frameworkdir)
-    return "-F " .. os.args(frameworkdir)
+    return {"-F", frameworkdir}
 end
 
 -- make the link flag
@@ -177,7 +172,7 @@ end
 
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-L" .. os.args(dir)
+    return {"-L", dir}
 end
 
 -- make the link arguments list
@@ -187,11 +182,7 @@ end
 
 -- link the target file
 function link(self, objectfiles, targetkind, targetfile, flags)
-
-    -- ensure the target directory
     os.mkdir(path.directory(targetfile))
-
-    -- link it
     os.runv(linkargv(self, objectfiles, targetkind, targetfile, flags))
 end
 

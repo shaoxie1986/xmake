@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -21,17 +21,29 @@
 -- define rule: xcode bundle
 rule("xcode.bundle")
 
+    -- support add_files("Info.plist")
+    add_deps("xcode.info_plist")
+
     -- we must set kind before target.on_load(), may we will use target in on_load()
     before_load(function (target)
-        
+
         -- get bundle directory
         local targetdir = target:targetdir()
         local bundledir = path.join(targetdir, target:basename() .. ".bundle")
-        target:data_set("xcode.bundledir", bundledir)
+        target:data_set("xcode.bundle.rootdir", bundledir)
 
-        -- set target info for bundle 
+        -- get contents and resources directory
+        local contentsdir = bundledir
+        local resourcesdir = bundledir
+        if target:is_plat("macosx") then
+            contentsdir = path.join(bundledir, "Contents")
+            resourcesdir = path.join(bundledir, "Contents", "Resources")
+        end
+        target:data_set("xcode.bundle.contentsdir", contentsdir)
+        target:data_set("xcode.bundle.resourcesdir", resourcesdir)
+
+        -- set target info for bundle
         target:set("filename", target:basename())
-        target:set("targetdir", path.join(bundledir, "Contents", "MacOS"))
 
         -- generate binary as bundle, we cannot set `-shared` or `-dynamiclib`
         target:set("kind", "binary")
@@ -41,61 +53,69 @@ rule("xcode.bundle")
         target:add("cleanfiles", bundledir)
     end)
 
-    after_build(function (target)
+    after_build(function (target, opt)
 
         -- imports
+        import("core.base.option")
+        import("core.theme.theme")
+        import("core.project.depend")
         import("private.tools.codesign")
+        import("private.utils.progress")
 
-        -- generate Info.plist
-        local function _gen_info_plist(info_plist_file)
-            io.gsub(info_plist_file, "(%$%((.-)%))", function (_, variable)
-                local maps = 
-                {
-                    DEVELOPMENT_LANGUAGE = "en",
-                    EXECUTABLE_NAME = target:basename(),
-                    PRODUCT_BUNDLE_IDENTIFIER = "org.tboox." .. target:name(),
-                    PRODUCT_NAME = target:name(),
-                    PRODUCT_BUNDLE_PACKAGE_TYPE = "BNDL", -- bundle
-                    CURRENT_PROJECT_VERSION = target:version() and tostring(target:version()) or "1.0"
-                }
-                return maps[variable]
-            end)
-        end
+        -- get bundle and resources directory
+        local bundledir = path.absolute(target:data("xcode.bundle.rootdir"))
+        local contentsdir = path.absolute(target:data("xcode.bundle.contentsdir"))
+        local resourcesdir = path.absolute(target:data("xcode.bundle.resourcesdir"))
 
-        -- get bundle directory
-        local bundledir = path.absolute(target:data("xcode.bundledir"))
+        -- do build if changed
+        depend.on_changed(function ()
 
-        -- copy resource files to the content directory
-        local srcfiles, dstfiles = target:installfiles(path.join(bundledir, "Contents"))
-        if srcfiles and dstfiles then
-            local i = 1
-            for _, srcfile in ipairs(srcfiles) do
-                local dstfile = dstfiles[i]
-                if dstfile then
-                    os.vcp(srcfile, dstfile)
-                    if path.filename(srcfile) == "Info.plist" then
-                        _gen_info_plist(dstfile)
-                    end
-                end
-                i = i + 1
+            -- trace progress info
+            progress.show(opt.progress, "${color.build.target}generating.xcode.$(mode) %s", path.filename(bundledir))
+
+            -- copy target file
+            if target:is_plat("macosx") then
+                os.vcp(target:targetfile(), path.join(contentsdir, "MacOS", path.filename(target:targetfile())))
+            else
+                os.vcp(target:targetfile(), path.join(contentsdir, path.filename(target:targetfile())))
             end
-        end
 
-        -- do codesign
-        codesign(bundledir, target:values("xcode.codesign_identity") or get_config("xcode_codesign_identity"))
+            -- copy resource files
+            local srcfiles, dstfiles = target:installfiles(resourcesdir)
+            if srcfiles and dstfiles then
+                local i = 1
+                for _, srcfile in ipairs(srcfiles) do
+                    local dstfile = dstfiles[i]
+                    if dstfile then
+                        os.vcp(srcfile, dstfile)
+                    end
+                    i = i + 1
+                end
+            end
+
+            -- do codesign
+            local codesign_identity = target:values("xcode.codesign_identity") or get_config("xcode_codesign_identity")
+            if target:is_plat("macosx") or (target:is_plat("iphoneos") and target:is_arch("x86_64", "i386")) then
+                codesign_identity = nil
+            end
+            codesign(bundledir, codesign_identity)
+
+        end, {dependfile = target:dependfile(bundledir), files = {bundledir, target:targetfile()}})
     end)
 
     on_install(function (target)
-        local bundledir = path.absolute(target:data("xcode.bundledir"))
+        local bundledir = path.absolute(target:data("xcode.bundle.rootdir"))
         local installdir = target:installdir()
-        if not os.isdir(installdir) then
-            os.mkdir(installdir)
+        if installdir then
+            if not os.isdir(installdir) then
+                os.mkdir(installdir)
+            end
+            os.vcp(bundledir, installdir)
         end
-        os.vcp(bundledir, installdir)
     end)
 
     on_uninstall(function (target)
-        local bundledir = path.absolute(target:data("xcode.bundledir"))
+        local bundledir = path.absolute(target:data("xcode.bundle.rootdir"))
         local installdir = target:installdir()
         os.tryrm(path.join(installdir, path.filename(bundledir)))
     end)

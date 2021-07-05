@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_windres.lua
@@ -20,35 +20,51 @@
 
 -- imports
 import("lib.detect.find_program")
-import("lib.detect.find_programver")
 
--- find windres 
+-- check
+function _check(program)
+    local objectfile = os.tmpfile() .. ".o"
+    local resourcefile  = os.tmpfile() .. ".rc"
+    io.writefile(resourcefile, [[
+#include <winresrc.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000004B0"
+        BEGIN
+            VALUE "ProductName", "xmake"
+        END
+    END
+END
+    ]])
+
+    os.runv(program, {"-i", resourcefile, "-o", objectfile})
+    os.rm(resourcefile)
+    os.rm(objectfile)
+end
+
+-- find windres
 --
 -- @param opt   the argument options, e.g. {version = true}
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local windres = find_windres()
 -- local windres, version = find_windres({version = true})
--- 
+--
 -- @endcode
 --
 function main(opt)
-
-    -- init options
     opt = opt or {}
-
-    -- find program
-    local program = find_program(opt.program or "windres", opt)
-
-    -- find program version
-    local version = nil
-    if program and opt and opt.version then
-        version = find_programver(program, opt)
-    end
-
-    -- ok?
-    return program, version
+    opt.check = _check -- we cannot run `windres --version` to check it, because llvm-mingw/windres always return non-zero
+    return find_program(opt.program or "windres", opt)
 end

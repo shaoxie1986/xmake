@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      OpportunityLiu
 -- @file        cli.lua
@@ -27,6 +27,7 @@ local string    = require("base/string")
 local hashset   = require("base/hashset")
 
 segment.__index = segment
+cli._segment = segment
 
 function segment:__tostring()
     return self.string
@@ -120,8 +121,6 @@ function cli.parsev(argv, flags)
     end
     return parsed
 end
-
-cli._segment = segment
 
 -- return module
 return cli

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        builder.lua
@@ -50,7 +50,7 @@ function builder:_targetkind()
 end
 
 -- map gcc flag to the given builder flag
-function builder:_mapflag(flag, flagkind, mapflags)
+function builder:_mapflag(flag, flagkind, mapflags, auto_ignore_flags)
 
     -- attempt to map it directly
     local flag_mapped = mapflags[flag]
@@ -62,47 +62,42 @@ function builder:_mapflag(flag, flagkind, mapflags)
     for k, v in pairs(mapflags) do
         local flag_mapped, count = flag:gsub("^" .. k .. "$", function (w) return v end)
         if flag_mapped and count ~= 0 then
-            return utils.ifelse(#flag_mapped ~= 0, flag_mapped, nil) 
+            return #flag_mapped ~= 0 and flag_mapped
         end
     end
 
     -- has this flag?
-    if self:has_flags(flag, flagkind) then
+    if auto_ignore_flags == false or self:has_flags(flag, flagkind) then
         return flag
+    else
+        utils.warning("add_%s(\"%s\") is ignored, please pass `{force = true}` or call `set_policy(\"check.auto_ignore_flags\", false)` if you want to set it.", flagkind, flag)
     end
 end
 
 -- map gcc flags to the given builder flags
-function builder:_mapflags(flags, flagkind)
+function builder:_mapflags(flags, flagkind, target)
 
-    -- wrap flags first
-    flags = table.wrap(flags)
-
-    -- done
     local results = {}
     local mapflags = self:get("mapflags")
-    if mapflags then
-
-        -- map flags
+    local auto_map_flags = target and target.policy and target:policy("check.auto_map_flags")
+    local auto_ignore_flags = target and target.policy and target:policy("check.auto_ignore_flags")
+    flags = table.wrap(flags)
+    if mapflags and (auto_map_flags ~= false) then
         for _, flag in pairs(flags) do
-            local flag_mapped = self:_mapflag(flag, flagkind, mapflags)
+            local flag_mapped = self:_mapflag(flag, flagkind, mapflags, auto_ignore_flags)
             if flag_mapped then
                 table.insert(results, flag_mapped)
             end
         end
-
     else
-
-        -- has flags?
         for _, flag in pairs(flags) do
-            if self:has_flags(flag, flagkind) then
+            if auto_ignore_flags == false or self:has_flags(flag, flagkind) then
                 table.insert(results, flag)
+            else
+                utils.warning("add_%s(\"%s\") is ignored, please pass `{force = true}` or call `set_policy(\"check.auto_ignore_flags\", false)` if you want to set it.", flagkind, flag)
             end
         end
-
     end
-
-    -- ok?
     return results
 end
 
@@ -113,7 +108,7 @@ end
 
 -- inherit flags (only for public/interface) from target deps
 --
--- e.g. 
+-- e.g.
 -- add_cflags("", {public = true})
 -- add_cflags("", {interface = true})
 --
@@ -131,47 +126,7 @@ function builder:_inherit_flags_from_targetdeps(flags, target)
     end
 end
 
--- inherit values (only for public/interface) from target deps
---
--- e.g. 
--- add_defines("", {public = true})
--- add_defines("", {interface = true})
---
-function builder:_inherit_values_from_targetdeps(values, target, name)
-    local orderdeps = target:orderdeps()
-    local total = #orderdeps
-    for idx, _ in ipairs(orderdeps) do
-        local dep = orderdeps[total + 1 - idx]
-        local depinherit = target:extraconf("deps", dep:name(), "inherit")
-        if depinherit == nil or depinherit then
-            table.join2(values, dep:get(name, {interface = true}))
-        end
-    end
-end
-
--- add values from target options
-function builder:_add_values_from_targetopts(values, target, name)
-    for _, opt in ipairs(target:orderopts()) do
-        table.join2(values, table.wrap(opt:get(name)))
-    end
-end
-
--- add values from target packages
-function builder:_add_values_from_targetpkgs(values, target, name)
-    for _, pkg in ipairs(target:orderpkgs()) do
-        -- uses them instead of the builtin configs if exists extra package config
-        -- e.g. `add_packages("xxx", {links = "xxx"})`
-        local configinfo = target:pkgconfig(pkg:name())
-        if configinfo and configinfo[name] then
-            table.join2(values, configinfo[name])
-        else
-            -- uses the builtin package configs
-            table.join2(values, pkg:get(name))
-        end
-    end
-end
-
--- add flags from the flagkind 
+-- add flags from the flagkind
 function builder:_add_flags_from_flagkind(flags, target, flagkind, opt)
     local targetflags = target:get(flagkind, opt)
     local extraconf   = target:extraconf(flagkind)
@@ -182,43 +137,56 @@ function builder:_add_flags_from_flagkind(flags, target, flagkind, opt)
             if flagconf and flagconf.force then
                 table.join2(flags, flag)
             else
-                table.join2(flags, self:_mapflags(flag, flagkind))
+                table.join2(flags, self:_mapflags(flag, flagkind, target))
             end
         end
     else
-        table.join2(flags, self:_mapflags(targetflags, flagkind))
+        table.join2(flags, self:_mapflags(targetflags, flagkind, target))
     end
 end
 
--- add flags from the configure 
+-- add flags from the configure
 function builder:_add_flags_from_config(flags)
     for _, flagkind in ipairs(self:_flagkinds()) do
-        table.join2(flags, config.get(flagkind))
+        local values = config.get(flagkind)
+        if values then
+            table.join2(flags, os.argv(values))
+        end
     end
 end
 
--- add flags from the option 
-function builder:_add_flags_from_option(flags, opt)
-    for _, flagkind in ipairs(self:_flagkinds()) do
-        self:_add_flags_from_flagkind(flags, opt, flagkind)
+-- add flags from the target options
+function builder:_add_flags_from_targetopts(flags, target)
+    for _, opt in ipairs(target:orderopts()) do
+        for _, flagkind in ipairs(self:_flagkinds()) do
+            self:_add_flags_from_flagkind(flags, opt, flagkind)
+        end
     end
 end
 
--- add flags from the package 
-function builder:_add_flags_from_package(flags, pkg)
-    for _, flagkind in ipairs(self:_flagkinds()) do
-        table.join2(flags, self:_mapflags(pkg:get(flagkind), flagkind))
+-- add flags from the target packages
+function builder:_add_flags_from_targetpkgs(flags, target)
+    for _, pkg in ipairs(target:orderpkgs()) do
+        for _, flagkind in ipairs(self:_flagkinds()) do
+            table.join2(flags, self:_mapflags(pkg:get(flagkind), flagkind, target))
+        end
     end
 end
 
--- add flags from the target 
+-- add flags from the target
 function builder:_add_flags_from_target(flags, target)
 
     -- no target?
     if not target then
         return
     end
- 
+
+    -- only for target and option
+    local target_type = target:type()
+    if target_type ~= "target" and target_type ~= "option" then
+        return
+    end
+
     -- init cache
     self._TARGETFLAGS = self._TARGETFLAGS or {}
     local cache = self._TARGETFLAGS
@@ -227,67 +195,61 @@ function builder:_add_flags_from_target(flags, target)
     local key = target:cachekey()
     local targetflags = cache[key]
     if not targetflags then
-    
+
         -- add flags from language
         targetflags = {}
         self:_add_flags_from_language(targetflags, target)
 
-        -- add flags for the target 
-        if target:type() == "target" then
+        -- add flags for the target
+        if target_type == "target" then
 
             -- add flags from options
-            for _, opt in ipairs(target:orderopts()) do
-                self:_add_flags_from_option(targetflags, opt)
-            end
+            self:_add_flags_from_targetopts(targetflags, target)
 
             -- add flags from packages
-            for _, pkg in ipairs(target:orderpkgs()) do
-                self:_add_flags_from_package(targetflags, pkg)
-            end
+            self:_add_flags_from_targetpkgs(targetflags, target)
 
             -- inherit flags (public/interface) from all dependent targets
             self:_inherit_flags_from_targetdeps(targetflags, target)
         end
 
-        -- add the target flags 
+        -- add the target flags
         for _, flagkind in ipairs(self:_flagkinds()) do
             self:_add_flags_from_flagkind(targetflags, target, flagkind)
         end
-
-        -- cache it
         cache[key] = targetflags
     end
-
-    -- add flags
     table.join2(flags, targetflags)
 end
 
--- add flags from the argument option 
+-- add flags from the argument option
 function builder:_add_flags_from_argument(flags, target, args)
 
     -- add flags from the flag kinds (cxflags, ..)
     for _, flagkind in ipairs(self:_flagkinds()) do
-
-        -- add auto mapping flags
-        table.join2(flags, self:_mapflags(args[flagkind], flagkind))
-
-        -- add original flags
+        table.join2(flags, self:_mapflags(args[flagkind], flagkind, target))
         local original_flags = (args.force or {})[flagkind]
         if original_flags then
             table.join2(flags, original_flags)
         end
     end
 
-    -- add flags (named) from the language 
-    if target then
-        local key = target:type()
-        self:_add_flags_from_language(flags, target, {[key] = function (name) return args[name] end})
-    else
-        self:_add_flags_from_language(flags, nil, {target = function (name) return args[name] end})
-    end
+    -- add flags (named) from the language
+    self:_add_flags_from_language(flags, nil, {
+        target = function (name) return args[name] end,
+        toolchain = function (name)
+            local plat, arch
+            if target and target.plat then
+                plat = target:plat()
+            end
+            if target and target.arch then
+                arch = target:arch()
+            end
+            return platform.toolconfig(name, plat, arch)
+        end})
 end
 
--- add flags from the language 
+-- add flags from the language
 function builder:_add_flags_from_language(flags, target, getters)
 
     -- init getters
@@ -305,30 +267,27 @@ function builder:_add_flags_from_language(flags, target, getters)
                             end
                             return values
                         end
-    ,   platform    =   platform.get
-    ,   target      =   function (name) 
-
-                            -- only for target
+    ,   toolchain   =   function (name)
+                            if target and target:type() == "target" then
+                                return target:toolconfig(name)
+                            else
+                                return platform.toolconfig(name)
+                            end
+                        end
+    ,   target      =   function (name)
                             local results = {}
                             if target:type() == "target" then
-
-                                -- inherit flagvalues (public or interface) of all dependent targets
-                                self:_inherit_values_from_targetdeps(results, target, name)
 
                                 -- get flagvalues of target with given flagname
                                 table.join2(results, target:get(name))
-                            end
-                            return results
-                        end
-    ,   option      =   function (name)
 
-                            -- is target? get flagvalues of the attached options and packages
-                            local results = {}
-                            if target:type() == "target" then
-                                self:_add_values_from_targetopts(results, target, name)
-                                self:_add_values_from_targetpkgs(results, target, name)
+                                -- get flagvalues of the attached options and packages
+                                table.join2(results, target:get_from_opts(name))
+                                table.join2(results, target:get_from_pkgs(name))
 
-                            -- is option? get flagvalues of option with given flagname
+                                -- get flagvalues (public or interface) of all dependent targets (contain packages/options)
+                                table.join2(results, target:get_from_deps(name, {interface = true}))
+
                             elseif target:type() == "option" then
                                 table.join2(results, target:get(name))
                             end
@@ -348,32 +307,35 @@ function builder:_add_flags_from_language(flags, target, getters)
         local getter = getters[flagscope]
         if getter then
 
-            -- get api name of tool 
-            --
-            -- ignore "nf_" and "_if_ok"
-            --
-            -- e.g.
-            --
-            -- defines => define
-            -- defines_if_ok => define
-            -- ...
-            --
-            local apiname = flagname:gsub("^nf_", ""):gsub("_if_ok$", "")
+            -- get api name of tool
+            local apiname  = flagname:gsub("^nf_", "")
+
+            -- use multiple values mapper if be defined in tool module
+            local multival = false
             if apiname:endswith("s") then
-                apiname = apiname:sub(1, #apiname - 1)
+                if self:_tool()["nf_" .. apiname] then
+                    multival = true
+                else
+                    apiname = apiname:sub(1, #apiname - 1)
+                end
             end
 
-            -- map name flag to real flag
+            -- map named flags to real flags
             local mapper = self:_tool()["nf_" .. apiname]
             if mapper then
-                
-                -- add the flags 
-                for _, flagvalue in ipairs(table.wrap(getter(flagname))) do
-
-                    -- map and check flag
-                    local flag = mapper(self:_tool(), flagvalue, target, self:_targetkind())
-                    if flag and flag ~= "" and (not checkstate or self:has_flags(flag)) then
-                        table.join2(flags, flag)
+                if multival then
+                    local results = mapper(self:_tool(), table.wrap(getter(flagname)), target, self:_targetkind())
+                    for _, flag in ipairs(table.wrap(results)) do
+                        if flag and flag ~= "" and (not checkstate or self:has_flags(flag)) then
+                            table.insert(flags, flag)
+                        end
+                    end
+                else
+                    for _, flagvalue in ipairs(table.wrap(getter(flagname))) do
+                        local flag = mapper(self:_tool(), flagvalue, target, self:_targetkind())
+                        if flag and flag ~= "" and (not checkstate or self:has_flags(flag)) then
+                            table.insert(flags, flag)
+                        end
                     end
                 end
             end
@@ -384,24 +346,47 @@ end
 -- preprocess flags
 function builder:_preprocess_flags(flags)
 
-    -- remove repeat
-    flags = table.unique(flags)
+    -- remove repeat by right direction, because we need consider links/deps order
+    -- @note https://github.com/xmake-io/xmake/issues/1240
+    local unique = {}
+    local count = #flags
+    if count > 1 then
+        local flags_new = {}
+        for idx = count, 1, -1 do
+            local flag = flags[idx]
+            local flagkey = type(flag) == "table" and table.concat(flag, "") or flag
+            if flag and not unique[flagkey] then
+                table.insert(flags_new, flag)
+                unique[flagkey] = true
+            end
+        end
+        flags = flags_new
+        count = #flags_new
+    end
 
-    -- split flag group, e.g. "-I /xxx" => {"-I", "/xxx"}
+    -- remove repeat first and split flags group, e.g. "-I /xxx" => {"-I", "/xxx"}
     local results = {}
-    for _, flag in ipairs(flags) do
-        flag = flag:trim()
-        if #flag > 0 then
-            if flag:find(" ", 1, true) then
-                table.join2(results, os.argv(flag))
+    if count > 0 then
+        for idx = count, 1, -1 do
+            local flag = flags[idx]
+            if type(flag) == "string" then
+                flag = flag:trim()
+                if #flag > 0 then
+                    if flag:find(" ", 1, true) then
+                        table.join2(results, os.argv(flag, {splitonly = true}))
+                    else
+                        table.insert(results, flag)
+                    end
+                end
             else
-                table.insert(results, flag)
+                -- may be a table group? e.g. {"-I", "/xxx"}
+                if #flag > 0 then
+                    table.join2(results, flag)
+                end
             end
         end
     end
-
-    -- get it
-    return results 
+    return results
 end
 
 -- get tool name
@@ -419,6 +404,16 @@ function builder:program()
     return self:_tool():program()
 end
 
+-- get toolchain of this tool
+function builder:toolchain()
+    return self:_tool():toolchain()
+end
+
+-- get the run environments
+function builder:runenvs()
+    return self:_tool():runenvs()
+end
+
 -- get properties of the tool
 function builder:get(name)
     return self:_tool():get(name)
@@ -429,10 +424,26 @@ function builder:has_flags(flags, flagkind)
     return self:_tool():has_flags(flags, flagkind)
 end
 
--- get the format of the given target kind 
-function builder:format(targetkind)
+-- map flags from name and values, e.g. linkdirs, links, defines
+function builder:map_flags(name, values, opt)
+    local flags  = {}
+    local mapper = self:_tool()["nf_" .. name]
+    if mapper then
+        opt = opt or {}
+        for _, value in ipairs(table.wrap(values)) do
+            local flag = mapper(self:_tool(), value, opt.target, opt.targetkind)
+            if flag and flag ~= "" and (not opt.check or self:has_flags(flag)) then
+                table.join2(flags, flag)
+            end
+        end
+    end
+    if #flags > 0 then
+        return flags
+    end
+end
 
-    -- get formats
+-- get the format of the given target kind
+function builder:format(targetkind)
     local formats = self:get("formats")
     if formats then
         return formats[targetkind]

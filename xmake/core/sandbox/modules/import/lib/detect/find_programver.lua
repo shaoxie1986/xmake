@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_programver.lua
@@ -22,23 +22,23 @@
 local sandbox_lib_detect_find_programver = sandbox_lib_detect_find_programver or {}
 
 -- load modules
-local os        = require("base/os")
-local path      = require("base/path")
-local table     = require("base/table")
-local utils     = require("base/utils")
-local option    = require("base/option")
-local semver    = require("base/semver")
-local project   = require("project/project")
-local sandbox   = require("sandbox/sandbox")
-local raise     = require("sandbox/modules/raise")
-local cache     = require("sandbox/modules/import/lib/detect/cache")
+local os          = require("base/os")
+local path        = require("base/path")
+local table       = require("base/table")
+local utils       = require("base/utils")
+local option      = require("base/option")
+local semver      = require("base/semver")
+local project     = require("project/project")
+local detectcache = require("cache/detectcache")
+local sandbox     = require("sandbox/sandbox")
+local raise       = require("sandbox/modules/raise")
 
 -- find program version
 --
 -- @param program   the program
 -- @param opt       the options, e.g. {command = "--version", parse = "(%d+%.?%d*%.?%d*.-)%s", verbose = true, force = true, cachekey = "xxx"}
 --                    - opt.command   the version command string or script, default: --version
---                    - opt.parse     the version parse script or lua match pattern 
+--                    - opt.parse     the version parse script or lua match pattern
 --
 -- @return          the version string
 --
@@ -62,10 +62,9 @@ function sandbox_lib_detect_find_programver.main(program, opt)
     end
 
     -- attempt to get result from cache first
-    local cacheinfo = cache.load(cachekey) 
-    local result = cacheinfo[program]
+    local result = detectcache:get2(cachekey, program)
     if result ~= nil and not opt.force then
-        return utils.ifelse(result, result, nil)
+        return result and result or nil
     end
 
     -- attempt to get version output info
@@ -78,14 +77,14 @@ function sandbox_lib_detect_find_programver.main(program, opt)
             utils.cprint("${color.warning}checkinfo: ${clear dim}" .. outdata)
         end
     else
-        ok, outdata = os.iorunv(program, {command or "--version"})
+        ok, outdata = os.iorunv(program, {command or "--version"}, {envs = opt.envs})
     end
 
     -- find version info
     if ok and outdata and #outdata > 0 then
         local parse = opt.parse
         if type(parse) == "function" then
-            ok, result = sandbox.load(parse, outdata) 
+            ok, result = sandbox.load(parse, outdata)
             if not ok and result and option.get("diagnosis") then
                 utils.cprint("${color.warning}checkinfo: ${clear dim}" .. result)
                 result = nil
@@ -98,13 +97,9 @@ function sandbox_lib_detect_find_programver.main(program, opt)
         end
     end
 
-    -- cache result
-    cacheinfo[program] = utils.ifelse(result, result, false)
-
-    -- save cache info
-    cache.save(cachekey, cacheinfo)
-
-    -- ok?
+    -- save result
+    detectcache:set2(cachekey, program, result and result or false)
+    detectcache:save()
     return result
 end
 

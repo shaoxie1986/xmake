@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        sandbox.lua
@@ -57,8 +57,8 @@ function sandbox._traceback(errors)
     results = results .. "stack traceback:\n"
 
     -- make results
-    local level = 2    
-    while true do    
+    local level = 2
+    while true do
 
         -- get debug info
         local info = debug.getinfo(level, "Sln")
@@ -71,18 +71,18 @@ function sandbox._traceback(errors)
         -- function?
         if info.what == "C" then
             results = results .. string.format("    [C]: in function '%s'\n", info.name)
-        elseif info.name then 
-            results = results .. string.format("    [%s:%d]: in function '%s'\n", info.short_src, info.currentline, info.name)    
+        elseif info.name then
+            results = results .. string.format("    [%s:%d]: in function '%s'\n", info.short_src, info.currentline, info.name)
         elseif info.what == "main" then
-            results = results .. string.format("    [%s:%d]: in main chunk\n", info.short_src, info.currentline)    
+            results = results .. string.format("    [%s:%d]: in main chunk\n", info.short_src, info.currentline)
             break
         else
-            results = results .. string.format("    [%s:%d]:\n", info.short_src, info.currentline)    
+            results = results .. string.format("    [%s:%d]:\n", info.short_src, info.currentline)
         end
 
         -- next
-        level = level + 1    
-    end    
+        level = level + 1
+    end
 
     -- ok?
     return results
@@ -150,7 +150,7 @@ function sandbox._new()
     end
 
     -- bind instance to the public script envirnoment
-    instance:bind(instance._PUBLIC) 
+    instance:bind(instance._PUBLIC)
 
     -- ok?
     return instance
@@ -162,7 +162,7 @@ function sandbox.new(script, filter, rootdir)
     -- check
     assert(script)
 
-    -- new instance 
+    -- new instance
     local self = sandbox._new()
 
     -- check
@@ -184,8 +184,6 @@ function sandbox.new(script, filter, rootdir)
 
     -- save script
     self._PRIVATE._SCRIPT = script
-
-    -- ok
     return self
 end
 
@@ -212,10 +210,10 @@ function sandbox:bind(script_or_env)
                             end
                         ,   __newindex = function (tbl, key, val)
                                 if type(key) == "string" and (key == "_SANDBOX" or key == "_SANDBOX_READABLE") then
-                                    return 
+                                    return
                                 end
                                 rawset(tbl, key, val)
-                            end}) 
+                            end})
 
     -- ok
     return script_or_env
@@ -251,7 +249,7 @@ function sandbox:fork(script, rootdir)
     return instance
 end
 
--- load script and module 
+-- load script and module
 function sandbox:module()
 
     -- this module has been loaded?
@@ -277,41 +275,25 @@ function sandbox:module()
             module[k] = v
         end
     end
-
-    -- save module
     self._PRIVATE._MODULE = module
-
-    -- ok
     return module
 end
 
 -- get script from the given sandbox
 function sandbox:script()
-
-    -- check
     assert(self and self._PRIVATE)
-
-    -- get it
     return self._PRIVATE._SCRIPT
 end
 
 -- get filter from the given sandbox
 function sandbox:filter()
-
-    -- check
     assert(self and self._PRIVATE)
-
-    -- get it
     return self._PRIVATE._FILTER
 end
 
 -- get root directory from the given sandbox
 function sandbox:rootdir()
-
-    -- check
     assert(self and self._PRIVATE)
-
-    -- get it
     return self._PRIVATE._ROOTDIR
 end
 
@@ -326,7 +308,7 @@ function sandbox.instance(script)
 
             -- enable to read _SANDBOX
             rawset(scope, "_SANDBOX_READABLE", true)
-            
+
             -- attempt to get it
             instance = scope._SANDBOX
 
@@ -341,12 +323,15 @@ function sandbox.instance(script)
     while level < 32 do
 
         -- get scope
-        local scope = getfenv(level)
+        local ok, scope = pcall(getfenv, level)
+        if not ok then
+            break;
+        end
         if scope then
 
             -- enable to read _SANDBOX
             rawset(scope, "_SANDBOX_READABLE", true)
-            
+
             -- attempt to get it
             instance = scope._SANDBOX
 
@@ -362,9 +347,7 @@ function sandbox.instance(script)
         -- next
         level = level + 1
     end
-
-    -- ok?
-    return instance 
+    return instance
 end
 
 -- return module

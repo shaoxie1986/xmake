@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        configfiles.lua
@@ -24,12 +24,13 @@ import("core.base.semver")
 import("core.project.config")
 import("core.project.project")
 import("core.platform.platform")
+import("lib.detect.find_tool")
 
 -- get all configuration files
 function _get_configfiles()
     local configfiles = {}
     for _, target in pairs(project.targets()) do
-        if target:get("enabled") ~= false then
+        if target:is_enabled() then
 
             -- get configuration files for target
             local srcfiles, dstfiles, fileinfos = target:configfiles()
@@ -71,7 +72,7 @@ function _get_builtinvars_target(target)
     local version, version_build = target:version()
     if version then
         builtinvars.VERSION = version
-        try {function () 
+        try {function ()
             local v = semver.new(version)
             if v then
                 builtinvars.VERSION_MAJOR = v:major()
@@ -86,11 +87,39 @@ function _get_builtinvars_target(target)
     return builtinvars
 end
 
+-- get the git builtin variables
+function _get_builtinvars_git(builtinvars)
+    local cmds =
+    {
+        GIT_TAG         = {"describe", "--tags"},
+        GIT_TAG_LONG    = {"describe", "--tags", "--long"},
+        GIT_BRANCH      = {"rev-parse", "--abbrev-ref", "HEAD"},
+        GIT_COMMIT      = {"rev-parse", "--short", "HEAD"},
+        GIT_COMMIT_LONG = {"rev-parse", "HEAD"},
+        GIT_COMMIT_DATE = {"log", "-1", "--date=format:%Y%m%d%H%M%S", "--format=%ad"}
+    }
+    for name, argv in pairs(cmds) do
+        builtinvars[name] = function ()
+            local result
+            local git = find_tool("git")
+            if git then
+                result = try {function ()
+                    return os.iorunv(git.program, argv)
+                end}
+            end
+            if not result then
+                result = "none"
+            end
+            return result:trim()
+        end
+    end
+end
+
 -- get the global builtin variables
 function _get_builtinvars_global()
-    local builtinvars = _g.builtinvars_global 
+    local builtinvars = _g.builtinvars_global
     if builtinvars == nil then
-        builtinvars = 
+        builtinvars =
         {
             arch  = config.get("arch") or os.arch()
         ,   plat  = config.get("plat") or os.host()
@@ -99,9 +128,12 @@ function _get_builtinvars_global()
         ,   debug = is_mode("debug") and 1 or 0
         ,   os    = platform.os()
         }
+        local builtinvars_upper = {}
         for name, value in pairs(builtinvars) do
-            builtinvars[name:upper()] = type(value) == "string" and value:upper() or value
+            builtinvars_upper[name:upper()] = type(value) == "string" and value:upper() or value
         end
+        table.join2(builtinvars, builtinvars_upper)
+        _get_builtinvars_git(builtinvars)
         _g.builtinvars_global = builtinvars
     end
     return builtinvars
@@ -159,13 +191,19 @@ function _generate_configfile(srcfile, dstfile, fileinfo, targets)
 
             -- get the builtin variables from the target
             for name, value in pairs(_get_builtinvars_target(target)) do
+                if type(value) == "function" then
+                    value = value()
+                end
                 if variables[name] == nil then
                     variables[name] = value
                 end
             end
         end
-        -- get the global builtin variables 
+        -- get the global builtin variables
         for name, value in pairs(_get_builtinvars_global()) do
+            if type(value) == "function" then
+                value = value()
+            end
             if variables[name] == nil then
                 variables[name] = value
             end
@@ -173,7 +211,7 @@ function _generate_configfile(srcfile, dstfile, fileinfo, targets)
 
         -- replace all variables
         local pattern = fileinfo.pattern or "%${(.-)}"
-        io.gsub(dstfile_tmp, "(" .. pattern .. ")", function(_, variable) 
+        io.gsub(dstfile_tmp, "(" .. pattern .. ")", function(_, variable)
 
             -- get variable name
             variable = variable:trim()
@@ -197,7 +235,7 @@ function _generate_configfile(srcfile, dstfile, fileinfo, targets)
             end
 
             -- get variable value
-            local value = variables[variable] 
+            local value = variables[variable]
             if isdefine then
                 if value == nil then
                     value = ("/* #undef %s */"):format(variable)
@@ -224,6 +262,9 @@ function _generate_configfile(srcfile, dstfile, fileinfo, targets)
                 assert(value ~= nil, "cannot get variable(%s) in %s.", variable, srcfile)
             end
             dprint("  > replace %s -> %s", variable, value)
+            if type(value) == "table" then
+                dprint("invalid variable value", value)
+            end
             return value
         end)
 
@@ -258,7 +299,7 @@ function main()
     for dstfile, srcinfo in pairs(configfiles) do
         _generate_configfile(srcinfo.srcfile, dstfile, srcinfo.fileinfo, srcinfo.targets)
     end
- 
+
     -- leave project directory
     os.cd(oldir)
 end

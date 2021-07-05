@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        panel.lua
@@ -25,6 +25,7 @@ local rect   = require("ui/rect")
 local event  = require("ui/event")
 local point  = require("ui/point")
 local curses = require("ui/curses")
+local action = require("ui/action")
 local dlist  = require("base/dlist")
 
 -- define module
@@ -43,10 +44,36 @@ function panel:init(name, bounds)
     self:option_set("selectable", true)
 
     -- init child views
-    self._VIEWS = dlist:new()
+    self._VIEWS = dlist.new()
 
     -- init views cache
     self._VIEWS_CACHE = {}
+
+    -- on click action
+    self:option_set("mouseable", true)
+    self:action_set(action.ac_on_clicked, function (v, x, y)
+
+        -- get relative coordinates
+        x, y = x - v:bounds().sx, y - v:bounds().sy
+
+        -- try focused first
+        local current = v:current()
+        if current and current:option("mouseable") and (current:option("blockmouse") or current:bounds():contains(x, y)) then
+            return current:action_on(action.ac_on_clicked, x, y)
+        end
+
+        local p = v:last()
+        while p do
+            if p:option("selectable") and p:bounds():contains(x, y) then
+                if p:option("mouseable") then
+                    v:select(p)
+                    return p:action_on(action.ac_on_clicked, x, y)
+                end
+                return true
+            end
+            p = v:prev(p)
+        end
+    end)
 end
 
 -- get all child views
@@ -69,6 +96,11 @@ function panel:first()
     return self._VIEWS:first()
 end
 
+-- get the last view
+function panel:last()
+    return self._VIEWS:last()
+end
+
 -- get the next view
 function panel:next(v)
     return self._VIEWS:next(v)
@@ -89,17 +121,8 @@ function panel:view(name)
     return self._VIEWS_CACHE[name]
 end
 
--- insert view
-function panel:insert(v, opt)
-
-    -- check
-    assert(not v:parent() or v:parent() == self)
-    assert(not self:view(v:name()), v:name() .. " has been in this panel!")
-
-    -- this view has been inserted into this panel? remove it first
-    if v:parent() == self then
-        self:remove(v)
-    end
+-- center view
+function panel:center(v, opt)
 
     -- center this view if centerx or centery are set
     local bounds = v:bounds()
@@ -117,6 +140,22 @@ function panel:insert(v, opt)
         bounds:move(org.x - bounds.sx, org.y - bounds.sy)
         v:invalidate(true)
     end
+end
+
+-- insert view
+function panel:insert(v, opt)
+
+    -- check
+    assert(not v:parent() or v:parent() == self)
+    assert(not self:view(v:name()), v:name() .. " has been in this panel!")
+
+    -- this view has been inserted into this panel? remove it first
+    if v:parent() == self then
+        self:remove(v)
+    end
+
+    -- center this view if centerx or centery are set
+    self:center(v, opt)
 
     -- insert this view
     self._VIEWS:push(v)
@@ -137,7 +176,7 @@ function panel:insert(v, opt)
 end
 
 -- remove view
-function panel:remove(v)
+function panel:remove(v, opt)
 
     -- check
     assert(v:parent() == self)
@@ -151,7 +190,11 @@ function panel:remove(v)
 
     -- select next view
     if self:current() == v then
-        self:select_next(nil, true)
+        if opt and opt.select_prev then
+            self:select_prev(nil, true)
+        else
+            self:select_next(nil, true)
+        end
     end
 
     -- invalidate it
@@ -185,8 +228,8 @@ function panel:select(v)
 
     -- get the current selected view
     local current = self:current()
-    if v == current then 
-        return 
+    if v == current then
+        return
     end
 
     -- undo the previous selected view
@@ -221,7 +264,7 @@ function panel:select_next(start, reset)
 
     -- is empty?
     if self:empty() then
-        return 
+        return
     end
 
     -- reset?
@@ -243,11 +286,11 @@ function panel:select_next(start, reset)
 end
 
 -- select the previous view
-function panel:select_prev(start)
+function panel:select_prev(start, reset)
 
     -- is empty?
     if self:empty() then
-        return 
+        return
     end
 
     -- reset?
@@ -269,16 +312,19 @@ function panel:select_prev(start)
 end
 
 -- on event
-function panel:event_on(e)
- 
+function panel:on_event(e)
+
     -- select view?
     if e.type == event.ev_keyboard then
-        if e.key_name == "Right" then
+        -- @note we also use '-' to switch them on termux without right/left and
+        -- we cannot use tab, because we still need swith views on windows. e.g. inputdialog
+        -- @see https://github.com/tboox/ltui/issues/11
+        if e.key_name == "Right" or e.key_name == "-" then
             return self:select_next()
         elseif e.key_name == "Left" then
             return self:select_prev()
         end
-    end   
+    end
 end
 
 -- set state
@@ -290,15 +336,15 @@ function panel:state_set(name, enable)
     return self
 end
 
--- draw panel 
-function panel:draw(transparent)
+-- draw panel
+function panel:on_draw(transparent)
 
     -- redraw panel?
     local redraw = self:state("redraw")
 
     -- draw panel background first
     if redraw then
-        view.draw(self, transparent)
+        view.on_draw(self, transparent)
     end
 
     -- draw all child views
@@ -307,49 +353,44 @@ function panel:draw(transparent)
             v:state_set("redraw", true)
         end
         if v:state("visible") and (v:state("redraw") or v:type() == "panel") then
-            v:draw(transparent)
+            v:on_draw(transparent)
         end
     end
 end
 
--- resize panel 
-function panel:resize()
+-- resize panel
+function panel:on_resize()
 
-    -- resize panel?
-    local resize = self:state("resize")
-    if resize then
-        view.resize(self)
-    end
+    -- resize panel
+    view.on_resize(self)
 
     -- resize all child views
     for v in self:views() do
-        if resize then
-            v:state_set("resize", true)
-        end
-        if v:state("visible") and (v:state("resize") or v:type() == "panel") then
-            v:resize()
+        v:state_set("resize", true)
+        if v:state("visible") then
+            v:on_resize()
         end
     end
 end
 
 -- refresh panel
-function panel:refresh()
+function panel:on_refresh()
 
     -- need not refresh? do not refresh it
     if not self:state("refresh") or not self:state("visible") then
-        return 
+        return
     end
 
     -- refresh all child views
     for v in self:views() do
         if v:state("refresh") then
-            v:refresh()
+            v:on_refresh()
             v:state_set("refresh", false)
         end
     end
 
     -- refresh it
-    view.refresh(self)
+    view.on_refresh(self)
 
     -- clear mark
     self:state_set("refresh", false)
@@ -363,17 +404,17 @@ end
 -- tostring(panel, level)
 function panel:_tostring(level)
     local str = ""
-    if self.views then  
+    if self.views then
         str = str .. string.format("<%s %s>", self:name(), tostring(self:bounds()))
         if not self:empty() then
             str = str .. "\n"
         end
-        for v in self:views() do  
+        for v in self:views() do
             for l = 1, level do
                 str = str .. "    "
             end
             str = str .. panel._tostring(v, level + 1) .. "\n"
-        end  
+        end
     else
         str = tostring(self)
     end

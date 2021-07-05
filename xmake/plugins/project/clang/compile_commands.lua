@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        compile_commands.lua
@@ -20,27 +20,65 @@
 
 -- imports
 import("core.tool.compiler")
+import("core.project.rule")
 import("core.project.project")
 import("core.language.language")
+import("private.utils.batchcmds")
 
--- make the object
-function _make_object(jsonfile, target, sourcefile, objectfile)
+-- escape path
+function _escape_path(p)
+    return os.args(p, {escape = true, nowrap = true})
+end
 
-    -- get the source file kind
-    local sourcekind = language.sourcekind_of(sourcefile)
+-- translate external/system include flags, because some tools (vscode) do not support them yet.
+-- https://github.com/xmake-io/xmake/issues/1050
+function _translate_arguments(arguments)
+    local args = {}
+    local is_msvc = path.basename(arguments[1]):lower() == "cl"
+    for _, arg in ipairs(arguments) do
+        if arg:find("-isystem", 1, true) then
+            arg = arg:replace("-isystem", "-I")
+        elseif arg:find("[%-/]external:I") then
+            arg = arg:gsub("[%-/]external:I", "-I")
+        elseif arg:find("[%-/]external:W") or arg:find("[%-/]experimental:external") then
+            arg = nil
+        end
+        -- @see use msvc-style flags for msvc to support language-server better
+        -- https://github.com/xmake-io/xmake/issues/1284
+        if is_msvc and arg and arg:startswith("-") then
+            arg = arg:gsub("^%-", "/")
+        end
+        if arg then
+            table.insert(args, arg)
+        end
+    end
+    return args
+end
 
-    -- make the object for the *.o/obj? ignore it directly
-    if sourcekind == "obj" or sourcekind == "lib" then 
-        return 
+-- make command
+function _make_arguments(jsonfile, arguments, sourcefile)
+
+    -- attempt to get source file from arguments
+    if not sourcefile then
+        for _, arg in ipairs(arguments) do
+            local sourcekind = try {function () return language.sourcekind_of(path.filename(arg)) end}
+            if sourcekind and os.isfile(arg) then
+                sourcefile = arg
+                break
+            end
+        end
+        if not sourcefile then
+            return
+        end
     end
 
-    -- get compile arguments
-    local arguments = table.join(compiler.compargv(sourcefile, objectfile, {target = target, sourcekind = sourcekind}))
+    -- translate some unsupported arguments
+    arguments = _translate_arguments(arguments)
 
     -- escape '"', '\'
     local arguments_escape = {}
     for _, arg in ipairs(arguments) do
-        table.insert(arguments_escape, os.args(arg, {escape = true}))
+        table.insert(arguments_escape, _escape_path(arg))
     end
 
     -- make body
@@ -49,21 +87,82 @@ function _make_object(jsonfile, target, sourcefile, objectfile)
   "directory": "%s",
   "arguments": ["%s"],
   "file": "%s"
-}]], (_g.firstline and "" or ",\n"), os.args(os.projectdir(), {escape = true}), table.concat(arguments_escape, "\", \""), os.args(sourcefile, {escape = true}))
+}]], (_g.firstline and "" or ",\n"), _escape_path(os.projectdir()), table.concat(arguments_escape, "\", \""), _escape_path(sourcefile))
 
     -- clear first line marks
     _g.firstline = false
 end
- 
--- make objects
-function _make_objects(jsonfile, target, sourcekind, sourcebatch)
-    for index, objectfile in ipairs(sourcebatch.objectfiles) do
-        _make_object(jsonfile, target, sourcebatch.sourcefiles[index], objectfile)
+
+-- make commands for object rules
+function _make_commands_for_objectrules(jsonfile, target, sourcebatch, suffix)
+
+    -- get rule
+    local rulename = assert(sourcebatch.rulename, "unknown rule for sourcebatch!")
+    local ruleinst = assert(project.rule(rulename) or rule.rule(rulename), "unknown rule: %s", rulename)
+
+    -- generate commands for xx_buildcmd_files
+    local scriptname = "buildcmd_files" .. (suffix and ("_" .. suffix) or "")
+    local script = ruleinst:script(scriptname)
+    if script then
+        local batchcmds_ = batchcmds.new({target = target})
+        script(target, batchcmds_, sourcebatch, {})
+        if not batchcmds_:empty() then
+            for _, cmd in ipairs(batchcmds_:cmds()) do
+                if cmd.program then
+                    _make_arguments(jsonfile, table.join(cmd.program, cmd.argv))
+                end
+            end
+        end
     end
+
+    -- generate commands for xx_buildcmd_file
+    if not script then
+        scriptname = "buildcmd_file" .. (suffix and ("_" .. suffix) or "")
+        script = ruleinst:script(scriptname)
+        if script then
+            local sourcekind = sourcebatch.sourcekind
+            for _, sourcefile in ipairs(sourcebatch.sourcefiles) do
+                local batchcmds_ = batchcmds.new({target = target})
+                script(target, batchcmds_, sourcefile, {})
+                if not batchcmds_:empty() then
+                    for _, cmd in ipairs(batchcmds_:cmds()) do
+                        if cmd.program then
+                            _make_arguments(jsonfile, table.join(cmd.program, cmd.argv))
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- make commands for objects
+function _make_commands_for_objects(jsonfile, target, sourcebatch)
+    local sourcekind = sourcebatch.sourcekind
+    if sourcekind then
+        for index, sourcefile in ipairs(sourcebatch.sourcefiles) do
+            local objectfile = sourcebatch.objectfiles[index]
+            local arguments = table.join(compiler.compargv(sourcefile, objectfile, {target = target, sourcekind = sourcekind}))
+            _make_arguments(jsonfile, arguments, sourcefile)
+        end
+        return true
+    end
+end
+
+-- make objects
+function _make_objects(jsonfile, target, sourcebatch)
+    _make_commands_for_objectrules(jsonfile, target, sourcebatch, "before")
+    if not _make_commands_for_objects(jsonfile, target, sourcebatch) then
+        _make_commands_for_objectrules(jsonfile, target, sourcebatch)
+    end
+    _make_commands_for_objectrules(jsonfile, target, sourcebatch, "after")
 end
 
 -- make target
 function _make_target(jsonfile, target)
+
+    -- enter package environments
+    local oldenvs = os.addenvs(target:pkgenvs())
 
     -- TODO
     -- disable precompiled header first
@@ -72,11 +171,11 @@ function _make_target(jsonfile, target)
 
     -- build source batches
     for _, sourcebatch in pairs(target:sourcebatches()) do
-        local sourcekind = sourcebatch.sourcekind
-        if sourcekind then
-            _make_objects(jsonfile, target, sourcekind, sourcebatch)
-        end
+        _make_objects(jsonfile, target, sourcebatch)
     end
+
+    -- restore package environments
+    os.setenvs(oldenvs)
 end
 
 -- make all
@@ -88,8 +187,7 @@ function _make_all(jsonfile)
     -- make commands
     _g.firstline = true
     for _, target in pairs(project.targets()) do
-        local isdefault = target:get("default")
-        if not target:isphony() and (isdefault == nil or isdefault == true) then
+        if not target:is_phony() then
             _make_target(jsonfile, target)
         end
     end
@@ -118,7 +216,7 @@ function make(outputdir)
 
     -- close the jsonfile
     jsonfile:close()
- 
+
     -- leave project directory
     os.cd(oldir)
 end

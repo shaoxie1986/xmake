@@ -13,7 +13,7 @@ xmake_CONFIG 			= y
 # core files
 xmake_C_FILES 			+= \
 						xmake \
-						machine \
+						engine \
 						os/argv \
 						os/args \
 						os/find \
@@ -124,6 +124,9 @@ endif
 ifeq ($(PLAT),msys)
 	iswin = yes
 endif
+ifeq ($(PLAT),mingw)
+	iswin = yes
+endif
 ifeq ($(PLAT),cygwin)
 	iswin = yes
 endif
@@ -132,6 +135,8 @@ ifdef iswin
 xmake_C_FILES 			+= \
 						winos/ansi \
 						winos/logical_drives \
+						winos/registry_keys \
+						winos/registry_values \
 						winos/registry_query
 endif
 
@@ -139,7 +144,7 @@ endif
 xmake_CXFLAGS 			+= -D__tb_prefix__=\"xmake\"
 xmake_CXFLAGS 			+= $(if $(findstring readline,$(base_LIBNAMES)),-DXM_CONFIG_API_HAVE_READLINE,)
 xmake_CXFLAGS 	   	    += $(if $(findstring curses,$(base_LIBNAMES)),-DXM_CONFIG_API_HAVE_CURSES,)
-	
+
 # includes
 xmake_INC_DIRS 		    += \
 						../tbox/tbox/src \
@@ -147,7 +152,7 @@ xmake_INC_DIRS 		    += \
 						../luajit/luajit/src \
                         ../sv/sv/include
 
-						
+
 # suffix
 include $(PRO_DIR)/suffix.mak
 

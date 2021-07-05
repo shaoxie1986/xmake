@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -25,30 +25,31 @@ platform("mingw")
     set_os("windows")
 
     -- set hosts
-    set_hosts("macosx", "linux", "windows")
+    set_hosts("macosx", "linux", "windows", "bsd")
 
-    -- set archs
-    set_archs("i386", "x86_64")
+    -- set archs, arm/arm64 only for llvm-mingw
+    set_archs("i386", "x86_64", "arm", "arm64")
 
     -- set formats
-    set_formats {static = "$(name).lib", object = "$(name).obj", shared = "$(name).dll", binary = "$(name).exe", symbol = "$(name).pdb"}
+    set_formats("static", "$(name).lib")
+    set_formats("object", "$(name).obj")
+    set_formats("shared", "$(name).dll")
+    set_formats("binary", "$(name).exe")
+    set_formats("symbol", "$(name).pdb")
 
-    -- on check project configuration
-    on_config_check("config")
-
-    -- on load
-    on_load("load")
+    -- set toolchains
+    set_toolchains("envs", "mingw", "yasm", "nasm", "fasm", "go")
 
     -- set menu
     set_menu {
-                config = 
-                {   
+                config =
+                {
                     {category = "MingW Configuration"                                     }
                 ,   {nil, "mingw",          "kv", nil,          "The MingW SDK Directory" }
                 }
 
-            ,   global = 
-                {   
+            ,   global =
+                {
                     {category = "MingW Configuration"                                     }
                 ,   {nil, "mingw",          "kv", nil,          "The MingW SDK Directory" }
                 }

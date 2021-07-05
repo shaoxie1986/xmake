@@ -1,22 +1,18 @@
--- add target
 target("lcurses")
-
-    -- make as a static library
     set_kind("static")
-
-    -- add deps
     add_deps("luajit")
-    if is_plat("windows") then
+    if is_plat("windows") and has_config("pdcurses") then
         add_deps("pdcurses")
+        add_defines("XM_CONFIG_API_HAVE_CURSES", {public = true})
+    elseif has_config("curses") then
+        add_defines("XM_CONFIG_API_HAVE_CURSES", {public = true})
+    else
+        set_default(false)
     end
-
-    -- add the common source files
     add_files("lcurses.c")
-  
-    -- add options
     if is_plat("windows") then
-        add_defines("PDCURSES", "XM_CONFIG_API_HAVE_CURSES")
-        add_includedirs("../pdcurses")
+        add_options("pdcurses")
+        set_languages("c89")
     else
         add_options("curses")
     end

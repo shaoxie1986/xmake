@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        main.lua
@@ -23,14 +23,14 @@ import("core.base.semver")
 import("core.base.option")
 import("core.base.task")
 import("core.base.process")
+import("core.base.tty")
 import("net.http")
 import("devel.git")
-import("devel.git.submodule")
 import("net.fasturl")
 import("core.base.privilege")
 import("privilege.sudo")
 import("private.async.runjobs")
-import("actions.require.impl.environment", {rootdir = os.programdir()})
+import("private.action.require.impl.environment")
 import("private.action.update.fetch_version")
 import("utils.archive")
 import("lib.detect.find_file")
@@ -146,7 +146,7 @@ function _install(sourcedir)
         local installdir = is_host("windows") and os.programdir() or "~/.local/bin"
 
         -- trace
-        utils.clearline()
+        tty.erase_line_to_start().cr()
         cprintf("${yellow}  => ${clear}installing to %s .. ", installdir)
         local ok = try
         {
@@ -173,7 +173,7 @@ function _install(sourcedir)
                     end
                 else
                     os.vrun("make build")
-                    process.openv("./scripts/get.sh", {"__local__", "__install_only__"}, {stdout = os.tmpfile(), stderr = os.tmpfile()}, {detach = true}):close()
+                    process.openv("./scripts/get.sh", {"__local__", "__install_only__"}, {stdout = os.tmpfile(), stderr = os.tmpfile(), detach = true}):close()
                 end
                 return true
             end,
@@ -187,18 +187,18 @@ function _install(sourcedir)
 
         -- trace
         if ok then
-            utils.clearline()
+            tty.erase_line_to_start().cr()
             cprint("${yellow}  => ${clear}install to %s .. ${color.success}${text.success}", installdir)
         else
             raise("install failed!")
         end
     end
 
-    -- do install 
+    -- do install
     if option.get("verbose") then
         install_task()
     else
-        runjobs("update/install", install_task, {showtips = true})
+        runjobs("update/install", install_task, {progress = true})
     end
 end
 
@@ -223,7 +223,7 @@ function _install_script(sourcedir)
                 local script_original = path.join(os.programdir(), "scripts", "update-script.bat")
                 local script = os.tmpfile() .. ".bat"
                 os.cp(script_original, script)
-                local params = { "/c", script, os.programdir(),  source }
+                local params = { "/c", script, os.programdir(), source }
                 os.tryrm(script_original .. ".bak")
                 local access = os.trymv(script_original, script_original .. ".bak")
                 _run_win_v("cmd", params, not access)
@@ -309,15 +309,19 @@ function main()
             raise("not support to update from unofficial source on windows, missing '--scriptonly' flag?")
         end
 
+        local winarch = os.arch() == "x64" and "win64" or "win32"
         if version:find('.', 1, true) then
-            local winarch = os.arch() == "x64" and "win64" or "win32"
             mainurls = {format("https://ci.appveyor.com/api/projects/waruqi/xmake/artifacts/xmake-installer.exe?tag=%s&pr=false&job=Image%%3A+Visual+Studio+2017%%3B+Platform%%3A+%s", version, os.arch()),
                         format("https://github.com/xmake-io/xmake/releases/download/%s/xmake-%s.%s.exe", version, version, winarch),
                         format("https://cdn.jsdelivr.net/gh/xmake-mirror/xmake-releases@%s/xmake-%s.%s.exe.zip", version, version, winarch),
                         format("https://gitlab.com/xmake-mirror/xmake-releases/raw/%s/xmake-%s.%s.exe.zip", version, version, winarch)}
         else
             -- regard as a git branch, fetch from ci
-            mainurls = {format("https://ci.appveyor.com/api/projects/waruqi/xmake/artifacts/xmake-installer.exe?branch=%s&pr=false&job=Image%%3A+Visual+Studio+2017%%3B+Platform%%3A+%s", version, os.arch())}
+            local tags = fetchinfo.tags
+            table.sort(tags)
+            local latest_version = tags[#tags] or ("v" .. xmake.version():shortstr())
+            mainurls = {format("https://ci.appveyor.com/api/projects/waruqi/xmake/artifacts/xmake-installer.exe?branch=%s&pr=false&job=Image%%3A+Visual+Studio+2017%%3B+Platform%%3A+%s", version, os.arch()),
+                        format("https://github.com/xmake-io/xmake/releases/download/%s/xmake-%s.%s.exe", latest_version, version, winarch)}
         end
 
         -- re-sort mainurls
@@ -342,7 +346,7 @@ function main()
     -- the download task
     local download_task = function ()
         for idx, url in ipairs(mainurls) do
-            utils.clearline()
+            tty.erase_line_to_start().cr()
             cprintf("${yellow}  => ${clear}downloading %s .. ", url)
             local ok = try
             {
@@ -350,7 +354,7 @@ function main()
                     os.tryrm(sourcedir)
                     if not install_from_git then
                         os.mkdir(sourcedir)
-                        local installerfile = path.join(sourcedir, win_installer_name) 
+                        local installerfile = path.join(sourcedir, win_installer_name)
                         if url:endswith(".zip") then
                             http.download(url, installerfile .. ".zip")
                             archive.extract(installerfile .. ".zip", installerfile .. ".dir")
@@ -373,7 +377,7 @@ function main()
                     end
                 }
             }
-            utils.clearline()
+            tty.erase_line_to_start().cr()
             if ok then
                 cprint("${yellow}  => ${clear}download %s .. ${color.success}${text.success}", url)
                 break
@@ -386,11 +390,11 @@ function main()
         end
     end
 
-    -- do download 
+    -- do download
     if option.get("verbose") then
         download_task()
     else
-        runjobs("update/download", download_task, {showtips = true})
+        runjobs("update/download", download_task, {progress = true})
     end
 
     -- leave environment

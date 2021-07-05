@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        menuconf.lua
@@ -31,6 +31,7 @@ import("core.ui.action")
 import("core.ui.menuconf")
 import("core.ui.mconfdialog")
 import("core.ui.application")
+import("private.detect.find_platform")
 
 -- the app application
 local app = application()
@@ -38,7 +39,7 @@ local app = application()
 -- init app
 function app:init()
 
-    -- init name 
+    -- init name
     application.init(self, "app.config")
 
     -- init background
@@ -54,12 +55,12 @@ end
 -- get menu config dialog
 function app:mconfdialog()
     if not self._MCONFDIALOG then
-        local mconfdialog = mconfdialog:new("app.config.mconfdialog", rect {1, 1, self:width() - 1, self:height() - 1}, "menu config")
-        mconfdialog:action_set(action.ac_on_exit, function (v) 
-            self:quit() 
+        local mconfdialog = mconfdialog:new("app.config.mconfdialog", rect{1, 1, self:width() - 1, self:height() - 1}, "menu config")
+        mconfdialog:action_set(action.ac_on_exit, function (v)
+            self:quit()
             os.exit()
         end)
-        mconfdialog:action_set(action.ac_on_save, function (v) 
+        mconfdialog:action_set(action.ac_on_save, function (v)
             self:save()
             self:quit()
         end)
@@ -68,9 +69,15 @@ function app:mconfdialog()
     return self._MCONFDIALOG
 end
 
+-- on resize
+function app:on_resize()
+    self:mconfdialog():bounds_set(rect{1, 1, self:width() - 1, self:height() - 1})
+    application.on_resize(self)
+end
+
 -- filter option
 function app:_filter_option(name)
-    local options = 
+    local options =
     {
         target      = true
     ,   file        = true
@@ -86,6 +93,8 @@ function app:_filter_option(name)
     ,   help        = true
     ,   clean       = true
     ,   menu        = true
+    ,   import      = true
+    ,   export      = true
     }
     return not options[name] and not project.option(name)
 end
@@ -93,9 +102,9 @@ end
 -- get or make menu by category
 function app:_menu_by_category(root, configs, menus, category)
 
-    -- is root? 
+    -- is root?
     if category == "." or category == "" then
-        return 
+        return
     end
 
     -- attempt to get menu first
@@ -120,16 +129,18 @@ end
 -- make configs by category
 function app:_make_configs_by_category(root, options_by_category, cache, get_option_info)
 
-    -- make configs category 
+    -- make configs category
     --
     -- root category: "."
     -- category path: "a", "a/b", "a/b/c" ...
     --
     local menus = {}
     local configs = {}
-    for category, options in pairs(options_by_category) do
+    local categories = table.orderkeys(options_by_category)
+    for _, category in ipairs(categories) do
 
         -- get or make menu by category
+        local options  = options_by_category[category]
         local menu = self:_menu_by_category(root, configs, menus, category)
 
         -- get sub-configs
@@ -151,7 +162,7 @@ function app:_make_configs_by_category(root, options_by_category, cache, get_opt
                 if value ~= nil and info.kind == "choice" and info.values then
                     for idx, val in ipairs(info.values) do
                         if value == val then
-                            value = idx 
+                            value = idx
                             break
                         end
                     end
@@ -188,10 +199,10 @@ function app:_make_configs_by_category(root, options_by_category, cache, get_opt
     return configs
 end
 
--- get basic configs 
+-- get basic configs
 function app:_basic_configs(cache)
-    
-    -- get configs from the cache first 
+
+    -- get configs from the cache first
     local configs = self._BASIC_CONFIGS
     if configs then
         return configs
@@ -204,7 +215,9 @@ function app:_basic_configs(cache)
     local category = "."
     local options = menu and menu.options or {}
     local options_by_category = {}
-    for _, opt in pairs(options) do
+    local keys = table.orderkeys(options)
+    for _, key in ipairs(keys) do
+        local opt = options[key]
         local name = opt[2] or opt[1]
         if name and self:_filter_option(name) then
             options_by_category[category] = options_by_category[category] or {}
@@ -215,33 +228,41 @@ function app:_basic_configs(cache)
     end
 
     -- make configs by category
-    self._BASIC_CONFIGS = self:_make_configs_by_category("Basic Configuration", options_by_category, cache, function (opt) 
+    self._BASIC_CONFIGS = self:_make_configs_by_category("Basic Configuration", options_by_category, cache, function (opt)
 
-        -- get default
+        -- get option
+        local name    = opt[2] or opt[1]
         local default = opt[4]
+        local kind    = (opt[3] == "k" or type(default) == "boolean") and "boolean" or "string"
 
-        -- get kind
-        local kind = (opt[3] == "k" or type(default) == "boolean") and "boolean" or "string"
+        -- get default platform
+        if name == "plat" then
+            default = find_platform()
+        elseif name == "arch" then
+            _, default = find_platform()
+        end
 
-        -- choice option? 
+        -- choice option?
         local values = opt.values
         if values then
-            kind = "choice"
             if type(values) == "function" then
                 values = values()
             end
             for idx, value in ipairs(values) do
                 if default == value then
-                    default = idx 
+                    default = idx
                     break
                 end
             end
+        end
+        if values then
+            kind = "choice"
         end
 
         -- get description
         local description = {}
         for i = 5, 64 do
-            local desc = opt[i] 
+            local desc = opt[i]
             if type(desc) == "function" then
                 desc = desc()
             end
@@ -255,15 +276,15 @@ function app:_basic_configs(cache)
         end
 
         -- make option info
-        return {name = opt[2] or opt[1], kind = kind, default = default, values = values, description = description}
+        return {name = name, kind = kind, default = default, values = values, description = description}
     end)
     return self._BASIC_CONFIGS
 end
 
--- get project configs 
+-- get project configs
 function app:_project_configs(cache)
- 
-    -- get configs from the cache first 
+
+    -- get configs from the cache first
     local configs = self._PROJECT_CONFIGS
     if configs then
         return configs
@@ -272,7 +293,9 @@ function app:_project_configs(cache)
     -- merge options by category
     local options = project.options()
     local options_by_category = {}
-    for _, opt in pairs(options) do
+    local keys = table.orderkeys(options)
+    for _, key in ipairs(keys) do
+        local opt = options[key]
         if opt:get("showmenu") then
             local category = "."
             if opt:get("category") then category = table.unwrap(opt:get("category")) end
@@ -282,7 +305,7 @@ function app:_project_configs(cache)
     end
 
     -- make configs by category
-    self._PROJECT_CONFIGS = self:_make_configs_by_category("Project Configuration", options_by_category, cache, function (opt) 
+    self._PROJECT_CONFIGS = self:_make_configs_by_category("Project Configuration", options_by_category, cache, function (opt)
 
         -- the default value
         local default = "auto"
@@ -299,13 +322,13 @@ function app:_project_configs(cache)
         -- get source info
         local sourceinfo = (opt:get("__sourceinfo_description") or {})[type(description) == "table" and description[1] or description]
 
-        -- choice option? 
+        -- choice option?
         local values = opt:get("values")
         if values then
             kind = "choice"
             for idx, value in ipairs(values) do
                 if default == value then
-                    default = idx 
+                    default = idx
                     break
                 end
             end
@@ -329,12 +352,21 @@ function app:_save_configs(configs)
     end
 end
 
+-- configs have been changed?
+function app:_configs_changed()
+    return self._CONFIGS_CHANGED
+end
+
 -- load configs from options
 function app:load(cache)
 
-    -- load config from cache
-    if cache then
-        cache = config.load(option.get("target") or "all")
+    -- merge configuration from the given import file or cache
+    local loaded = false
+    local importfile = option.get("import")
+    if importfile and os.isfile(importfile) then
+        loaded = config.load(importfile)
+    elseif cache then
+        loaded = config.load()
     end
 
     -- clear configs first
@@ -348,18 +380,20 @@ function app:load(cache)
     self:mconfdialog():load(configs)
 
     -- the previous config is only for loading menuconf, so clear config now
-    if cache then
+    if loaded then
         config.clear()
     end
 end
 
 -- save configs to options
 function app:save()
-    self:_save_configs(self:_basic_configs())    
-    self:_save_configs(self:_project_configs())    
+    self:_save_configs(self:_basic_configs())
+    self:_save_configs(self:_project_configs())
+    self._CONFIGS_CHANGED = true
 end
 
 -- main entry
 function main(...)
     app:run(...)
+    return app:_configs_changed()
 end

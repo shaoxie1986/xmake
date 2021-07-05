@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        curses.lua
@@ -140,7 +140,7 @@ function curses.calc_attr(attrs)
         local set = {}
         local fg = nil
         local bg = nil
-        for _, a in ipairs(attrs) do 
+        for _, a in ipairs(attrs) do
             if not set[a] and a then
                 set[a] = true
                 if type(a) == "number" then
@@ -182,7 +182,7 @@ function curses.color_pair(fg, bg)
 
     -- no colors?
     if not curses.has_colors() then
-        return 0 
+        return 0
     end
 
     -- update the colors count
@@ -211,6 +211,11 @@ function curses.cursor_set(state)
         curses._CURSOR_STATE = state
         curses._cursor_set(state)
     end
+end
+
+-- has mouse?
+function curses.has_mouse()
+    return curses.KEY_MOUSE and true or false
 end
 
 -- return module: curses

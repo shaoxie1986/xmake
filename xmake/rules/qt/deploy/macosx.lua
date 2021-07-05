@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        macosx.lua
@@ -23,11 +23,21 @@ import("core.theme.theme")
 import("core.base.option")
 import("core.project.config")
 import("core.project.depend")
+import("core.tool.toolchain")
 import("lib.detect.find_path")
+import("private.utils.progress")
 
 -- save Info.plist
 function _save_info_plist(target, info_plist_file)
 
+    -- get target minver
+    local target_minver = nil
+    local toolchain_xcode = toolchain.load("xcode", {plat = target:plat(), arch = target:arch()})
+    if toolchain_xcode then
+        target_minver = toolchain_xcode:config("target_minver")
+    end
+
+    -- generate info.plist
     local name = target:basename()
     io.writefile(info_plist_file, string.format([[<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -58,7 +68,7 @@ function _save_info_plist(target, info_plist_file)
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
-</plist>]], name, name, name, name, get_config("target_minver") or (macos.version():major() .. "." .. macos.version():minor())))
+</plist>]], name, name, name, name, target_minver or (macos.version():major() .. "." .. macos.version():minor())))
 end
 
 -- deploy application package for macosx
@@ -69,17 +79,12 @@ function main(target, opt)
     local targetfile = target:targetfile()
     local dependfile = target:dependfile(target_app)
     local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
-    if not depend.is_changed(dependinfo, {lastmtime = os.mtime(target_app)}) then
-        return 
+    if not depend.is_changed(dependinfo, {lastmtime = os.mtime(dependfile)}) then
+        return
     end
 
     -- trace progress info
-    cprintf("${color.build.progress}" .. theme.get("text.build.progress_format") .. ":${clear} ", opt.progress)
-    if option.get("verbose") then
-        cprint("${dim color.build.target}generating.qt.app %s.app", target:basename())
-    else
-        cprint("${color.build.target}generating.qt.app %s.app", target:basename())
-    end
+    progress.show(opt.progress, "${color.build.target}generating.qt.app %s.app", target:basename())
 
     -- get qt sdk
     local qt = target:data("qt")
@@ -88,7 +93,7 @@ function main(target, opt)
     local macdeployqt = path.join(qt.bindir, "macdeployqt")
     assert(os.isexec(macdeployqt), "macdeployqt not found!")
 
-    -- generate target app 
+    -- generate target app
     local target_contents = path.join(target_app, "Contents")
     os.tryrm(target_app)
     os.cp(target:targetfile(), path.join(target_contents, "MacOS", target:basename()))

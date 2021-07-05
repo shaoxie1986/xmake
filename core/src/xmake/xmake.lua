@@ -1,11 +1,13 @@
--- add target
 target("xmake")
 
     -- make as a static library
     set_kind("static")
 
     -- add deps
-    add_deps("lcurses", "sv", "luajit", "tbox")
+    if has_config("curses") or has_config("pdcurses") then
+        add_deps("lcurses")
+    end
+    add_deps("sv", "luajit", "lua-cjson", "tbox")
 
     -- add defines
     add_defines("__tb_prefix__=\"xmake\"")
@@ -21,20 +23,21 @@ target("xmake")
     add_includedirs("..", {interface = true})
     add_includedirs("$(buildir)/$(plat)/$(arch)/$(mode)", {public = true})
 
+    -- add header files
+    add_headerfiles("../(xmake/*.h)")
+    add_headerfiles("../(xmake/prefix/*.h)")
+    add_headerfiles("$(buildir)/$(plat)/$(arch)/$(mode)/xmake.config.h", {prefixdir = "xmake"})
+
     -- add the common source files
     add_files("**.c|winos/*.c")
     if is_plat("windows", "msys", "cygwin") then
         add_files("winos/*.c")
     end
 
-    -- add readline
+    -- add options
     add_options("readline")
-
-    if is_plat("windows") or has_config("curses") then
-        add_defines("XM_CONFIG_API_HAVE_CURSES")
-    end
     if is_plat("windows") then
         add_defines("UNICODE", "_UNICODE")
     end
- 
+
 

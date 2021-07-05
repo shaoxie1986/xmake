@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        clang_cl.lua
@@ -21,6 +21,7 @@
 -- inherit cl
 inherit("cl")
 import("core.base.option")
+import("core.base.tty")
 import("core.base.colors")
 
 -- init it
@@ -33,7 +34,7 @@ function init(self)
         ["-W1"] = "-Wall"
     ,   ["-W2"] = "-Wall"
     ,   ["-W3"] = "-Wall"
-    ,   ["-W4"] = "-Wextra"
+    ,   ["-W4"] = "-Wall -Wextra"
     ,   ["-Weverything"] = "-Wall -Wextra -Weffc++"
 
         -- language
@@ -65,7 +66,7 @@ end
 function _has_color_diagnostics(self)
     local colors_diagnostics = _g._HAS_COLOR_DIAGNOSTICS
     if colors_diagnostics == nil then
-        if io.isatty() and (colors.color8() or colors.color256()) then
+        if io.isatty() and (tty.has_color8() or tty.has_color256()) then
             local theme = colors.theme()
             if theme and theme:name() ~= "plain" then
                 -- for clang
@@ -87,8 +88,8 @@ end
 function nf_optimize(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none       = "-O0"
     ,   fast       = "-O1"
     ,   faster     = "-O2"
@@ -98,7 +99,7 @@ function nf_optimize(self, level)
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the language flag
@@ -106,7 +107,7 @@ function nf_language(self, stdname)
 
     -- the stdc maps
     if _g.cmaps == nil then
-        _g.cmaps = 
+        _g.cmaps =
         {
             -- stdc
             ansi        = "-Xclang -ansi"
@@ -121,7 +122,7 @@ function nf_language(self, stdname)
 
     -- the stdc++ maps
     if _g.cxxmaps == nil then
-        _g.cxxmaps = 
+        _g.cxxmaps =
         {
             cxx98        = "-Xclang -std=c++98"
         ,   gnuxx98      = "-Xclang -std=gnu++98"
@@ -174,7 +175,7 @@ function compile(self, sourcefile, objectfile, dependinfo, flags)
             end
 
             -- has color diagnostics? enable it
-            local colors_diagnostics = _has_color_diagnostics(self) 
+            local colors_diagnostics = _has_color_diagnostics(self)
             if colors_diagnostics then
                 compflags = table.join(compflags, colors_diagnostics)
             end
@@ -204,7 +205,7 @@ function compile(self, sourcefile, objectfile, dependinfo, flags)
 
                     -- get 16 lines of errors
                     if start > 0 then
-                        lines = table.slice(lines, start, start + ifelse(#lines - start > 16, 16, #lines - start))
+                        lines = table.slice(lines, start, start + ((#lines - start > 16) and 16 or (#lines - start)))
                     end
                 end
 
@@ -219,7 +220,7 @@ function compile(self, sourcefile, objectfile, dependinfo, flags)
                 if ok and errdata and #errdata > 0 and (option.get("diagnosis") or option.get("warning")) then
                     local lines = errdata:split('\n', {plain = true})
                     if #lines > 0 then
-                        local warnings = table.concat(table.slice(lines, 1, ifelse(#lines > 8, 8, #lines)), "\n")
+                        local warnings = table.concat(table.slice(lines, 1, (#lines > 8 and 8 or #lines)), "\n")
                         cprint("${color.warning}%s", warnings)
                     end
                 end

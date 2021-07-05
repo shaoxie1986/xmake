@@ -11,31 +11,34 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_dotnet.lua
 --
 
 -- imports
-import("lib.detect.cache")
 import("lib.detect.find_file")
+import("core.tool.toolchain")
 import("core.base.option")
 import("core.base.global")
 import("core.project.config")
+import("core.cache.detectcache")
 
 -- find dotnet directory
 function _find_sdkdir(sdkdir)
 
-    -- get sdk directory from vsvars
+    -- get sdk directory from vcvars
     if not sdkdir then
-        local arch = config.arch()
-        local vcvarsall = config.get("__vcvarsall")
-        if vcvarsall then
-            sdkdir = (vcvarsall[arch] or {}).WindowsSdkDir
-            if sdkdir then
-                sdkdir = path.join(path.directory(path.translate(sdkdir)), "NETFXSDK")
+        local msvc = toolchain.load("msvc")
+        if msvc and msvc:check() then
+            local vcvars = msvc:config("vcvars")
+            if vcvars then
+                sdkdir = vcvars.WindowsSdkDir
+                if sdkdir then
+                    sdkdir = path.join(path.directory(path.translate(sdkdir)), "NETFXSDK")
+                end
             end
         end
     end
@@ -81,14 +84,14 @@ end
 -- find dotnet toolchains
 --
 -- @param sdkdir    the dotnet directory
--- @param opt       the argument options, e.g. {verbose = true, force = false, version = "5.9.1"} 
+-- @param opt       the argument options, e.g. {verbose = true, force = false, version = "5.9.1"}
 --
 -- @return          the dotnet toolchains. e.g. {sdkver = ..., sdkdir = ..., bindir = .., libdir = ..., includedir = ..., .. }
 --
--- @code 
+-- @code
 --
 -- local toolchains = find_dotnet("~/dotnet")
--- 
+--
 -- @endcode
 --
 function main(sdkdir, opt)
@@ -98,11 +101,11 @@ function main(sdkdir, opt)
 
     -- attempt to load cache first
     local key = "detect.sdks.find_dotnet." .. (sdkdir or "")
-    local cacheinfo = cache.load(key)
+    local cacheinfo = detectcache:get(key) or {}
     if not opt.force and cacheinfo.dotnet then
         return cacheinfo.dotnet
     end
-       
+
     -- find dotnet
     local dotnet = _find_dotnet(sdkdir or config.get("dotnet") or global.get("dotnet"), opt.version or config.get("dotnet_sdkver"))
     if dotnet then
@@ -113,21 +116,20 @@ function main(sdkdir, opt)
 
         -- trace
         if opt.verbose or option.get("verbose") then
-            cprint("checking for the .Net SDK directory ... ${color.success}%s", dotnet.sdkdir)
-            cprint("checking for the .Net SDK version ... ${color.success}%s", dotnet.sdkver)
+            cprint("checking for .Net SDK directory ... ${color.success}%s", dotnet.sdkdir)
+            cprint("checking for .Net SDK version ... ${color.success}%s", dotnet.sdkver)
         end
     else
 
         -- trace
         if opt.verbose or option.get("verbose") then
-            cprint("checking for the .Net SDK directory ... ${color.nothing}${text.nothing}")
+            cprint("checking for .Net SDK directory ... ${color.nothing}${text.nothing}")
         end
     end
 
     -- save to cache
     cacheinfo.dotnet = dotnet or false
-    cache.save(key, cacheinfo)
-
-    -- ok?
+    detectcache:set(key, cacheinfo)
+    detectcache:save()
     return dotnet
 end

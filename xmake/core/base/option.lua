@@ -11,19 +11,20 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        option.lua
 --
 
 -- define module: option
-local option = option or {}
+local option = {}
 
 -- load modules
 local cli       = require("base/cli")
 local table     = require("base/table")
+local tty       = require("base/tty")
 local colors    = require("base/colors")
 local text      = require("base/text")
 
@@ -39,7 +40,7 @@ function option._translate(menu)
                 for k, m in pairs(_submenus_or_errors) do
                     submenus_all[k] = m
                 end
-            else 
+            else
                 return false, (_submenus_or_errors or "translate option menu failed!")
             end
         else
@@ -140,7 +141,7 @@ function option.init(menu)
             end
         end
 
-        -- not found? 
+        -- not found?
         if not context.taskname or not menu[context.taskname] then
             option.show_main()
             return false, "invalid task: " .. xmake._COMMAND
@@ -455,7 +456,7 @@ end
 -- show update tips
 function option.show_update_tips()
 
-    -- show latest version 
+    -- show latest version
     local versionfile = path.join(os.tmpdir(), "latest_version")
     if os.isfile(versionfile) then
         local versioninfo = io.load(versionfile)
@@ -484,29 +485,30 @@ function option.show_update_tips()
 end
 
 -- show logo
-function option.show_logo()
+function option.show_logo(logo, opt)
 
     -- define logo
-    local logo = [[
-                         _        
-    __  ___ __  __  __ _| | ______ 
+    logo = logo or [[
+                         _
+    __  ___ __  __  __ _| | ______
     \ \/ / |  \/  |/ _  | |/ / __ \
      >  <  | \__/ | /_| |   <  ___/
-    /_/\_\_|_|  |_|\__ \|_|\_\____| 
+    /_/\_\_|_|  |_|\__ \|_|\_\____|
 
-                         by ruki, tboox.org
+                         by ruki, xmake.io
     ]]
 
     -- make rainbow for logo
-    if colors.truecolor() or colors.color256() then
-        local lines = {} 
-        local seed  = 236
+    opt = opt or {}
+    if tty.has_color24() or tty.has_color256() then
+        local lines = {}
+        local seed  = opt.seed or 236
         for _, line in ipairs(logo:split("\n")) do
             local i = 0
             local line2 = ""
             line:gsub(".", function (c)
-                local code = colors.truecolor() and colors.rainbow24(i, seed) or colors.rainbow256(i, seed)
-                line2 = string.format("%s${%s}%s", line2, code, c)
+                local code = tty.has_color24() and colors.rainbow24(i, seed) or colors.rainbow256(i, seed)
+                line2 = string.format("%s${bright %s}%s", line2, code, c)
                 i = i + 1
             end)
             table.insert(lines, line2)
@@ -530,13 +532,13 @@ function option.show_logo()
     option.show_update_tips()
 end
 
--- show the menu 
+-- show the menu
 function option.show_menu(task)
 
     -- no task? print main menu
-    if not task then 
+    if not task then
         option.show_main()
-        return 
+        return
     end
 
     -- the menu
@@ -683,7 +685,7 @@ function option.show_main()
     end
 end
 
--- show the options menu 
+-- show the options menu
 function option.show_options(options, taskname)
 
     -- check

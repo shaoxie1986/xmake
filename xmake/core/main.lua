@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        main.lua
@@ -29,67 +29,48 @@ local utils         = require("base/utils")
 local option        = require("base/option")
 local table         = require("base/table")
 local global        = require("base/global")
-local deprecated    = require("base/deprecated")
 local privilege     = require("base/privilege")
 local task          = require("base/task")
 local colors        = require("base/colors")
 local process       = require("base/process")
 local scheduler     = require("base/scheduler")
 local theme         = require("theme/theme")
+local config        = require("project/config")
 local project       = require("project/project")
-local history       = require("project/history")
---local profiler      = require("base/profiler")
+local localcache    = require("cache/localcache")
+local profiler      = require("base/profiler")
 
 -- init the option menu
 local menu =
 {
-    -- title
     title = "${bright}xmake v" .. _VERSION .. ", A cross-platform build utility based on Lua${clear}"
-
-    -- copyright
-,   copyright = "Copyright (C) 2015-2020 Ruki Wang, ${underline}tboox.org${clear}, ${underline}xmake.io${clear}"
+,   copyright = "Copyright (C) 2015-present Ruki Wang, ${underline}tboox.org${clear}, ${underline}xmake.io${clear}"
 
     -- the tasks: xmake [task]
-,   function () 
+,   function ()
         local tasks = task.tasks() or {}
         local ok, project_tasks = pcall(project.tasks)
         if ok then
             table.join2(tasks, project_tasks)
         end
-        return task.menu(tasks) 
+        return task.menu(tasks)
     end
 
 }
 
 -- show help and version info
 function main._show_help()
-
-    -- show help
     if option.get("help") then
-    
-        -- print menu
         option.show_menu(option.taskname())
-
-        -- ok
         return true
-
-    -- show version
     elseif option.get("version") then
-
-        -- show title
         if menu.title then
             utils.cprint(menu.title)
         end
-
-        -- show copyright
         if menu.copyright then
             utils.cprint(menu.copyright)
         end
-
-        -- show logo
         option.show_logo()
-
-        -- ok
         return true
     end
 end
@@ -105,7 +86,7 @@ function main._find_root(projectfile)
         local parentdir = path.directory(dir)
         if parentdir and parentdir ~= dir and parentdir ~= '.' then
             dir = parentdir
-        else 
+        else
             break
         end
     end
@@ -114,7 +95,7 @@ function main._find_root(projectfile)
     for _, dir in ipairs(dirs) do
         local file = path.join(dir, "xmake.lua")
         if os.isfile(file) then
-           return file 
+           return file
         end
     end
     return projectfile
@@ -138,43 +119,54 @@ end
 -- the init function for main
 function main._init()
 
+    -- disable scheduler first
+    scheduler:enable(false)
+
     -- get project directory and project file from the argument option
     local options, err = main._basicparse()
     if not options then
         return false, err
     end
-    local opt_projectdir, opt_projectfile = options.project, options.file
 
-    -- init the project directory
-    local projectdir = opt_projectdir or xmake._PROJECT_DIR
-    if projectdir and not path.is_absolute(projectdir) then
-        projectdir = path.absolute(projectdir)
-    elseif projectdir then
-        projectdir = path.translate(projectdir)
-    end
-    xmake._PROJECT_DIR = projectdir
-    assert(projectdir)
+    -- init project paths only for xmake engine
+    if xmake._NAME == "xmake" then
+        local opt_projectdir, opt_projectfile = options.project, options.file
 
-    -- init the xmake.lua file path
-    local projectfile = opt_projectfile or xmake._PROJECT_FILE
-    if projectfile and not path.is_absolute(projectfile) then
-        projectfile = path.absolute(projectfile, projectdir)
-    end
-    xmake._PROJECT_FILE = projectfile
-    assert(projectfile)
+        -- init the project directory
+        local projectdir = opt_projectdir or xmake._PROJECT_DIR
+        if projectdir and not path.is_absolute(projectdir) then
+            projectdir = path.absolute(projectdir)
+        elseif projectdir then
+            projectdir = path.translate(projectdir)
+        end
+        xmake._PROJECT_DIR = projectdir
+        assert(projectdir)
 
-    -- find the root project file
-    if not os.isfile(projectfile) or (not opt_projectdir and not opt_projectfile) then
-        projectfile = main._find_root(projectfile)
-    end
+        -- init the xmake.lua file path
+        local projectfile = opt_projectfile or xmake._PROJECT_FILE
+        if projectfile and not path.is_absolute(projectfile) then
+            projectfile = path.absolute(projectfile, projectdir)
+        end
+        xmake._PROJECT_FILE = projectfile
+        assert(projectfile)
 
-    -- update and enter project
-    xmake._PROJECT_DIR  = path.directory(projectfile)
-    xmake._PROJECT_FILE = projectfile
+        -- find the root project file
+        if not os.isfile(projectfile) or (not opt_projectdir and not opt_projectfile) then
+            projectfile = main._find_root(projectfile)
+        end
 
-    -- enter the project directory
-    if os.isdir(os.projectdir()) then
-        os.cd(os.projectdir())
+        -- update and enter project
+        xmake._PROJECT_DIR  = path.directory(projectfile)
+        xmake._PROJECT_FILE = projectfile
+
+        -- enter the project directory
+        if os.isdir(os.projectdir()) then
+            os.cd(os.projectdir())
+        end
+    else
+        -- patch a fake project file and directory for other lua programs with xmake/engine
+        xmake._PROJECT_DIR  = path.join(os.tmpdir(), "local")
+        xmake._PROJECT_FILE = path.join(xmake._PROJECT_DIR, xmake._NAME .. ".lua")
     end
 
     -- add the directory of the program file (xmake) to $PATH environment
@@ -184,8 +176,29 @@ function main._init()
     else
         os.addenv("PATH", os.programdir())
     end
-
     return true
+end
+
+-- exit main program
+function main._exit(ok, errors)
+
+    -- show errors
+    local retval = 0
+    if not ok then
+        retval = -1
+        if errors then
+            utils.error(errors)
+        end
+    end
+
+    -- show warnings
+    utils.show_warnings()
+
+    -- close log
+    log:close()
+
+    -- return exit code
+    return retval
 end
 
 -- the main entry function
@@ -194,15 +207,13 @@ function main.entry()
     -- init
     local ok, errors = main._init()
     if not ok then
-        utils.error(errors)
-        return -1
+        return main._exit(ok, errors)
     end
 
     -- load global configuration
     ok, errors = global.load()
     if not ok then
-        utils.error(errors)
-        return -1
+        return main._exit(ok, errors)
     end
 
     -- load theme
@@ -211,50 +222,57 @@ function main.entry()
         colors.theme_set(theme_inst)
     end
 
-    -- init option 
+    -- init option
     ok, errors = option.init(menu)
     if not ok then
-        utils.error(errors)
-        return -1
+        return main._exit(ok, errors)
     end
 
     -- check run command as root
     if not option.get("root") and os.getenv("XMAKE_ROOT") ~= 'y' then
         if os.isroot() then
             if not privilege.store() or os.isroot() then
-                utils.error([[Running xmake as root is extremely dangerous and no longer supported.
+                errors = [[Running xmake as root is extremely dangerous and no longer supported.
 As xmake does not drop privileges on installation you would be giving all
-build scripts full access to your system. 
+build scripts full access to your system.
 Or you can add `--root` option or XMAKE_ROOT=y to allow run as root temporarily.
-                ]])
-                return -1
+                ]]
+                return main._exit(false, errors)
             end
         end
     end
 
     -- start profiling
-    -- profiler:start()
+    if profiler:enabled() then
+        profiler:start()
+    end
 
     -- show help?
     if main._show_help() then
-        return 0
+        return main._exit(true)
     end
 
-    -- save command lines to history
-    local skipHistory = (os.getenv('XMAKE_SKIP_HISTORY') or ''):trim()
-    if os.isfile(os.projectfile()) and skipHistory == '' then
-        history("local.history"):save("cmdlines", option.cmdline())
+    -- save command lines to history and we need to make sure that the .xmake directory is not generated everywhere
+    local skip_history = (os.getenv('XMAKE_SKIP_HISTORY') or ''):trim()
+    if os.projectfile() and os.isfile(os.projectfile()) and os.isdir(config.directory()) and skip_history == '' then
+        local cmdlines = table.wrap(localcache.get("history", "cmdlines"))
+        if #cmdlines > 64 then
+            table.remove(cmdlines, 1)
+        end
+        table.insert(cmdlines, option.cmdline())
+        localcache.set("history", "cmdlines", cmdlines)
+        localcache.save("history")
     end
 
     -- get task instance
     local taskname = option.taskname() or "build"
-    local taskinst = project.task(taskname) or task.task(taskname)
+    local taskinst = task.task(taskname) or project.task(taskname)
     if not taskinst then
-        utils.error("do unknown task(%s)!", taskname)
-        return -1
+        return main._exit(false, string.format("do unknown task(%s)!", taskname))
     end
 
-    -- run task    
+    -- run task
+    scheduler:enable(true)
     scheduler:co_start_named("xmake " .. taskname, function ()
         local ok, errors = taskinst:run()
         if not ok then
@@ -263,21 +281,16 @@ Or you can add `--root` option or XMAKE_ROOT=y to allow run as root temporarily.
     end)
     ok, errors = scheduler:runloop()
     if not ok then
-        utils.error(errors)
-        return -1
+        return main._exit(ok, errors)
     end
-    
-    -- dump deprecated entries
-    deprecated.dump()
 
     -- stop profiling
-    -- profiler:stop()
+    if profiler:enabled() then
+        profiler:stop()
+    end
 
-    -- close log
-    log:close()
-
-    -- ok
-    return 0
+    -- exit normally
+    return main._exit(true)
 end
 
 -- return module: main

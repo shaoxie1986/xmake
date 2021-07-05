@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      TitanSnow
  * @file        getwinsize.c
@@ -41,7 +41,7 @@
  * implementation
  */
 
-// get console window size 
+// get console window size
 tb_int_t xm_os_getwinsize(lua_State* lua)
 {
     // check

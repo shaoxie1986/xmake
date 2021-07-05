@@ -11,65 +11,85 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        build.lua
 --
 
 -- imports
+import("core.base.option")
+import("core.theme.theme")
+import("core.project.depend")
 import("private.tools.codesign")
-
--- generate Info.plist
-function _gen_info_plist(target, info_plist_file)
-    io.gsub(info_plist_file, "(%$%((.-)%))", function (_, variable)
-        local maps = 
-        {
-            DEVELOPMENT_LANGUAGE = "en",
-            EXECUTABLE_NAME = target:basename(),
-            PRODUCT_BUNDLE_IDENTIFIER = "org.tboox." .. target:name(),
-            PRODUCT_NAME = target:name(),
-            PRODUCT_BUNDLE_PACKAGE_TYPE = "APPL", -- application
-            CURRENT_PROJECT_VERSION = target:version() and tostring(target:version()) or "1.0",
-            MACOSX_DEPLOYMENT_TARGET = get_config("target_minver")
-        }
-        return maps[variable]
-    end)
-end
+import("private.utils.progress")
 
 -- main entry
-function main (target)
+function main (target, opt)
 
-    -- get app directory
-    local appdir = path.absolute(target:data("xcode.appdir"))
+    -- get app and resources directory
+    local bundledir = path.absolute(target:data("xcode.bundle.rootdir"))
+    local contentsdir = path.absolute(target:data("xcode.bundle.contentsdir"))
+    local resourcesdir = path.absolute(target:data("xcode.bundle.resourcesdir"))
 
-    -- get contents directory
-    local contentsdir = appdir
-    if is_plat("macosx") then
-        contentsdir = path.join(appdir, "Contents")
-    end
+    -- do build if changed
+    depend.on_changed(function ()
 
-    -- copy PkgInfo to the contents directory
-    os.cp(path.join(os.programdir(), "scripts", "PkgInfo"), contentsdir)
+        -- trace progress info
+        progress.show(opt.progress, "${color.build.target}generating.xcode.$(mode) %s", path.filename(bundledir))
 
-    -- copy resource files to the contents directory
-    local srcfiles, dstfiles = target:installfiles(contentsdir)
-    if srcfiles and dstfiles then
-        local i = 1
-        for _, srcfile in ipairs(srcfiles) do
-            local dstfile = dstfiles[i]
-            if dstfile then
-                os.vcp(srcfile, dstfile)
-                if path.filename(srcfile) == "Info.plist" then
-                    _gen_info_plist(target, dstfile)
+        -- copy target file
+        local binarydir = contentsdir
+        if target:is_plat("macosx") then
+            binarydir = path.join(contentsdir, "MacOS")
+        end
+        os.vcp(target:targetfile(), path.join(binarydir, path.filename(target:targetfile())))
+
+        -- copy dependent dynamic libraries, TODO copy frameworks
+        for _, dep in ipairs(target:orderdeps()) do
+            if dep:kind() == "shared" then
+                os.vcp(dep:targetfile(), binarydir)
+            end
+        end
+
+        -- copy PkgInfo to the contents directory
+        os.vcp(path.join(os.programdir(), "scripts", "PkgInfo"), resourcesdir)
+
+        -- copy resource files to the resources directory
+        local srcfiles, dstfiles = target:installfiles(resourcesdir)
+        if srcfiles and dstfiles then
+            local i = 1
+            for _, srcfile in ipairs(srcfiles) do
+                local dstfile = dstfiles[i]
+                if dstfile then
+                    os.vcp(srcfile, dstfile)
+                end
+                i = i + 1
+            end
+        end
+
+        -- generate embedded.mobileprovision to *.app/embedded.mobileprovision
+        local mobile_provision_embedded = path.join(bundledir, "embedded.mobileprovision")
+        local mobile_provision = target:values("xcode.mobile_provision") or get_config("xcode_mobile_provision")
+        if mobile_provision and target:is_plat("iphoneos") then
+            os.tryrm(mobile_provision_embedded)
+            local provisions = codesign.mobile_provisions()
+            if provisions then
+                local mobile_provision_data = provisions[mobile_provision]
+                if mobile_provision_data then
+                    io.writefile(mobile_provision_embedded, mobile_provision_data)
                 end
             end
-            i = i + 1
         end
-    end
 
-    -- do codesign
-    codesign(appdir, target:values("xcode.codesign_identity") or get_config("xcode_codesign_identity"))
+        -- do codesign
+        local codesign_identity = target:values("xcode.codesign_identity") or get_config("xcode_codesign_identity")
+        if target:is_plat("macosx") or (target:is_plat("iphoneos") and target:is_arch("x86_64", "i386")) then
+            codesign_identity = nil
+        end
+        codesign(bundledir, codesign_identity, mobile_provision, {deep = true})
+
+    end, {dependfile = target:dependfile(bundledir), files = {bundledir, target:targetfile()}})
 end
 

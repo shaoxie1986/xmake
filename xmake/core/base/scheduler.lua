@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        scheduler.lua
@@ -62,7 +62,7 @@ function _coroutine:waitobj_set(obj)
     self._WAITOBJ = obj
 end
 
--- get the raw coroutine thread 
+-- get the raw coroutine thread
 function _coroutine:thread()
     return self._THREAD
 end
@@ -85,6 +85,16 @@ end
 -- is suspended?
 function _coroutine:is_suspended()
     return self:status() == "suspended"
+end
+
+-- is isolated?
+function _coroutine:is_isolated()
+    return self._ISOLATED
+end
+
+-- isolate coroutine environments
+function _coroutine:isolate(isolate)
+    self._ISOLATED = isolate
 end
 
 -- get the current timer task
@@ -117,7 +127,7 @@ function scheduler:_timer()
     return t
 end
 
--- get poller object data for socket, pipe or process object 
+-- get poller object data for socket, pipe or process object
 function scheduler:_poller_data(obj)
     return self._POLLERDATA and self._POLLERDATA[obj] or nil
 end
@@ -130,7 +140,7 @@ end
 -- data.poller_events_save: the saved events for poller (triggered)
 --
 function scheduler:_poller_data_set(obj, data)
-    local pollerdata = self._POLLERDATA 
+    local pollerdata = self._POLLERDATA
     if not pollerdata then
         pollerdata = {}
         self._POLLERDATA = pollerdata
@@ -180,7 +190,7 @@ function scheduler:_poller_events_cb(obj, events)
             local co_waiting = pollerdata.co_waiting
             pollerdata.co_waiting = nil
             return self:_poller_resume_co(co_waiting, 1)
-        else 
+        else
             pollerdata.proc_pending = 1
         end
         return true
@@ -207,8 +217,8 @@ function scheduler:_poller_events_cb(obj, events)
         pollerdata.co_recv = nil
         pollerdata.co_send = nil
         return self:_poller_resume_co(co_recv, events)
-    else 
-    
+    else
+
         if co_recv then
             pollerdata.co_recv = nil
             local ok, errors = self:_poller_resume_co(co_recv, bit.band(events, bit.bnot(poller.EV_POLLER_SEND)))
@@ -238,21 +248,51 @@ end
 -- update the current directory hash of current coroutine
 function scheduler:_co_curdir_update(curdir)
 
+    -- get running coroutine
+    local running = self:co_running()
+    if not running then
+        return
+    end
+
     -- save the current directory hash
     curdir = curdir or os.curdir()
     local curdir_hash = hash.uuid4(path.absolute(curdir)):sub(1, 8)
-    self._CO_CURDIR = curdir_hash
+    self._CO_CURDIR_HASH = curdir_hash
 
     -- save the current directory for each coroutine
-    local running = self:co_running()
-    if running then
-        local co_curdirs = self._CO_CURDIRS
-        if not co_curdirs then
-            co_curdirs = {}
-            self._CO_CURDIRS = co_curdirs
-        end
-        co_curdirs[running] = {curdir_hash, curdir}
+    local co_curdirs = self._CO_CURDIRS
+    if not co_curdirs then
+        co_curdirs = {}
+        self._CO_CURDIRS = co_curdirs
     end
+    co_curdirs[running] = {curdir_hash, curdir}
+end
+
+-- update the current environments hash of current coroutine
+function scheduler:_co_curenvs_update(envs)
+
+    -- get running coroutine
+    local running = self:co_running()
+    if not running then
+        return
+    end
+
+    -- save the current directory hash
+    local envs_hash = ""
+    envs = envs or os.getenvs()
+    for _, key in ipairs(table.orderkeys(envs)) do
+        envs_hash = envs_hash .. key:upper() .. envs[key]
+    end
+    envs_hash = hash.uuid4(envs_hash):sub(1, 8)
+    self._CO_CURENVS_HASH = envs_hash
+
+    -- save the current directory for each coroutine
+    local co_curenvs = self._CO_CURENVS
+    if not co_curenvs then
+        co_curenvs = {}
+        self._CO_CURENVS = co_curenvs
+    end
+    co_curenvs[running] = {envs_hash, envs}
 end
 
 -- resume it's waiting coroutine if all coroutines are dead in group
@@ -304,22 +344,33 @@ end
 
 -- start a new named coroutine task
 function scheduler:co_start_named(coname, cotask, ...)
+    return self:co_start_withopt({name = coname}, cotask, ...)
+end
+
+-- start a new coroutine task with options
+function scheduler:co_start_withopt(opt, cotask, ...)
 
     -- check coroutine task
+    opt = opt or {}
+    local coname = opt.name
     if not cotask then
         return nil, string.format("cannot start coroutine, invalid cotask(%s/%s)", coname and coname or "anonymous", cotask)
     end
 
     -- start coroutine
     local co
-    co = _coroutine.new(coname, coroutine.create(function(...) 
+    co = _coroutine.new(coname, coroutine.create(function(...)
         self:_co_curdir_update()
+        self:_co_curenvs_update()
         cotask(...)
         self:co_tasks()[co:thread()] = nil
         if self:co_count() > 0 then
             self._CO_COUNT = self:co_count() - 1
         end
     end))
+    if opt.isolate then
+        co:isolate(true)
+    end
     self:co_tasks()[co:thread()] = co
     self._CO_COUNT = self:co_count() + 1
     if self._STARTED then
@@ -355,10 +406,17 @@ function scheduler:co_suspend(...)
 
     -- if the current directory has been changed? restore it
     local running = assert(self:co_running())
-    local curdir = self._CO_CURDIR
+    local curdir = self._CO_CURDIR_HASH
     local olddir = self._CO_CURDIRS and self._CO_CURDIRS[running] or nil
     if olddir and curdir ~= olddir[1] then -- hash changed?
         os.cd(olddir[2])
+    end
+
+    -- if the current environments has been changed? restore it
+    local curenvs = self._CO_CURENVS_HASH
+    local oldenvs = self._CO_CURENVS and self._CO_CURENVS[running] or nil
+    if oldenvs and curenvs ~= oldenvs[1] and running:is_isolated() then -- hash changed?
+        os.setenvs(oldenvs[2])
     end
 
     -- return results
@@ -373,7 +431,7 @@ end
 -- sleep some times (ms)
 function scheduler:co_sleep(ms)
 
-    -- we need not do sleep 
+    -- we need not do sleep
     if ms == 0 then
         return true
     end
@@ -390,7 +448,7 @@ function scheduler:co_sleep(ms)
     end
 
     -- register timeout task to timer
-    self:_timer():post(function (cancel) 
+    self:_timer():post(function (cancel)
         if running:is_suspended() then
             return self:co_resume(running)
         end
@@ -409,7 +467,7 @@ end
 
 -- begin coroutine group
 function scheduler:co_group_begin(name, scopefunc)
-    
+
     -- enter groups
     self._CO_GROUPS = self._CO_GROUPS or {}
     self._CO_GROUPS_PENDING = self._CO_GROUPS_PENDING or {}
@@ -432,7 +490,7 @@ function scheduler:co_group_begin(name, scopefunc)
     return true
 end
 
--- wait for finishing the given coroutine group 
+-- wait for finishing the given coroutine group
 function scheduler:co_group_wait(name, opt)
 
     -- get coroutine group
@@ -458,7 +516,7 @@ function scheduler:co_group_wait(name, opt)
 
     -- wait it
     local count
-    repeat 
+    repeat
         count = 0
         for _, co in ipairs(co_group) do
             if count < limit then
@@ -474,7 +532,7 @@ function scheduler:co_group_wait(name, opt)
             self._CO_GROUPS_WAITING[name] = {running, limit}
             self:co_suspend()
         end
-    until count >= limit 
+    until count >= limit
 
     -- remove all dead coroutines in group
     if limit == #co_group and count == limit then
@@ -504,11 +562,11 @@ function scheduler:co_group_waitobjs(name)
     return objs
 end
 
--- get the current running coroutine 
+-- get the current running coroutine
 function scheduler:co_running()
     if self._ENABLED then
         local running = coroutine.running()
-        return running and self:co_tasks()[running] or nil 
+        return running and self:co_tasks()[running] or nil
     end
 end
 
@@ -562,7 +620,7 @@ function scheduler:poller_wait(obj, events, timeout)
     -- get the previous poller object events
     local events_wait = events
     if pollerdata.poller_events_wait ~= 0 then
-        
+
         -- return the cached events directly if the waiting events exists cache
         local events_prev_wait = pollerdata.poller_events_wait
         local events_prev_save = pollerdata.poller_events_save
@@ -591,7 +649,7 @@ function scheduler:poller_wait(obj, events, timeout)
         end
         events_wait = bit.bor(events_wait, events)
 
-        -- modify poller object from poller for waiting events if the waiting events has been changed 
+        -- modify poller object from poller for waiting events if the waiting events has been changed
         if bit.band(events_prev_wait, events_wait) ~= events_wait then
 
             -- maybe wait recv/send at same time
@@ -612,7 +670,7 @@ function scheduler:poller_wait(obj, events, timeout)
     -- register timeout task to timer
     local timer_task = nil
     if timeout > 0 then
-        timer_task = self:_timer():post(function (cancel) 
+        timer_task = self:_timer():post(function (cancel)
             if not cancel and running:is_suspended() then
                 running:waitobj_set(nil)
                 return self:co_resume(running, 0)
@@ -622,11 +680,11 @@ function scheduler:poller_wait(obj, events, timeout)
     end
     running:_timer_task_set(timer_task)
 
-    -- save waiting events 
+    -- save waiting events
     pollerdata.poller_events_wait = events_wait
     pollerdata.poller_events_save = 0
 
-    -- save the current coroutine 
+    -- save the current coroutine
     if bit.band(events, poller.EV_POLLER_RECV) ~= 0 then
         pollerdata.co_recv = running
     end
@@ -683,7 +741,7 @@ function scheduler:poller_waitproc(obj, timeout)
     -- register timeout task to timer
     local timer_task = nil
     if timeout > 0 then
-        timer_task = self:_timer():post(function (cancel) 
+        timer_task = self:_timer():post(function (cancel)
             if not cancel and running:is_suspended() then
                 pollerdata.co_waiting = nil
                 running:waitobj_set(nil)
@@ -724,7 +782,7 @@ function scheduler:poller_cancel(obj)
     return true
 end
 
--- enable or disable to scheduler 
+-- enable or disable to scheduler
 function scheduler:enable(enabled)
     self._ENABLED = enabled
 end
@@ -750,8 +808,13 @@ function scheduler:runloop()
     end
 
     -- set on change directory callback for scheduler
-    os._sched_chdir_set(function (oldir, curdir)
+    os._sched_chdir_set(function (curdir)
         self:_co_curdir_update(curdir)
+    end)
+
+    -- set on change environments callback for scheduler
+    os._sched_chenvs_set(function (envs)
+        self:_co_curenvs_update(envs)
     end)
 
     -- start all ready coroutine tasks
@@ -773,7 +836,7 @@ function scheduler:runloop()
     local ok = true
     local errors = nil
     local timeout = -1
-    while self._STARTED and self:co_count() > 0 do 
+    while self._STARTED and self:co_count() > 0 do
 
         -- resume it's waiting coroutine if some coroutines are dead in group
         local resumed_count, resumed_errors = self:_co_groups_resume()

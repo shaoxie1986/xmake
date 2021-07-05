@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        require.lua
@@ -39,14 +39,18 @@ task("require")
             ,   shortname = 'q'
 
                 -- options
-            ,   options = 
+            ,   options =
                 {
                     {'c', "clean",      "k",  nil,       "Clear all package caches and uninstall all not-referenced packages.",
                                                          "e.g.",
                                                          "    $ xmake require --clean",
                                                          "    $ xmake require --clean zlib tbox pcr*"                          }
                 ,   {'f', "force",      "k",  nil,       "Force to reinstall all package dependencies."                        }
-                ,   {nil, "shallow",    "k",  nil,       "Only install the root packages."                                     }
+                ,   {'j', "jobs",       "kv", tostring(math.ceil(os.cpuinfo().ncpu * 3 / 2)),
+                                                         "Set the number of parallel compilation jobs."                        }
+                ,   {nil, "linkjobs",   "kv", nil,       "Set the number of parallel link jobs."                               }
+                ,   {nil, "shallow",    "k",  nil,       "Does not install dependent packages."                                }
+                ,   {nil, "build",      "k",  nil,       "Always build and install packages from source."                      }
                 ,   {'l', "list",       "k",  nil,       "List all package dependencies in project.",
                                                          "e.g.",
                                                          "    $ xmake require --list"                                          }
@@ -58,6 +62,13 @@ task("require")
                 ,   {nil, "info",       "k",  nil,       "Show the given package info.",
                                                          "e.g.",
                                                          "    $ xmake require --info tbox"                                     }
+                ,   {nil, "fetch",      "k",  nil,      "Fetch the library info of given package.",
+                                                         "e.g.",
+                                                         "    $ xmake require --fetch tbox"                                    }
+                ,   {nil, "fetch_modes","kv", nil,      "Set the modes of fetching packages.",
+                                                         "e.g.",
+                                                         "    $ xmake require --fetch --fetch_modes=cflags,external tbox",
+                                                         "    $ xmake require --fetch --fetch_modes=deps,cflags,ldflags tbox"  }
                 ,   {'s', "search",     "k",  nil,       "Search for the given packages from repositories.",
                                                          "e.g.",
                                                          "    $ xmake require --search tbox"                                   }
@@ -66,13 +77,19 @@ task("require")
                                                          "    $ xmake require --uninstall",
                                                          "    $ xmake require --uninstall tbox",
                                                          "    $ xmake require --uninstall --extra=\"{debug=true}\" tbox"       }
-                ,   {nil, "export",     "k", nil,        "Export the installed packages.",
+                ,   {nil, "export",     "k", nil,        "Export the installed packages and their dependencies.",
                                                          "e.g.",
                                                          "    $ xmake require --export",
                                                          "    $ xmake require --export tbox zlib",
-                                                         "    $ xmake require --export --exportdir=packagesdir zlib",
+                                                         "    $ xmake require --export --packagedir=packagesdir zlib",
                                                          "    $ xmake require --export --extra=\"{debug=true}\" tbox"          }
-                ,   {nil, "exportdir",  "kv", "packages","Set the exported packages directory."                                }
+                ,   {nil, "import",     "k", nil,        "Import the installed packages and their dependencies.",
+                                                         "e.g.",
+                                                         "    $ xmake require --import",
+                                                         "    $ xmake require --import tbox zlib",
+                                                         "    $ xmake require --import --packagedir=packagesdir zlib",
+                                                         "    $ xmake require --import --extra=\"{debug=true}\" tbox"          }
+                ,   {nil, "packagedir", "kv", "packages","Set the packages directory for exporting and importing."             }
                 ,   {nil, "extra",      "kv", nil,       "Set the extra info of packages."                                     }
                 ,   {                                                                                                          }
                 ,   {nil, "requires",   "vs", nil,       "The package requires.",
@@ -81,4 +98,4 @@ task("require")
                                                          "    $ xmake require \"zlib >=1.2.11\" \"tbox master\"",
                                                          "    $ xmake require --extra=\"{debug=true,configs={xxx=true}}\" tbox"}
                 }
-            } 
+            }

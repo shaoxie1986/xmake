@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        platform.lua
@@ -26,18 +26,17 @@ local platform  = require("platform/platform")
 local raise     = require("sandbox/modules/raise")
 
 -- load the current platform
-function sandbox_core_platform.load(plat)
-
-    -- load the platform configure
-    local ok, errors = platform.load(plat) 
-    if not ok then
+function sandbox_core_platform.load(plat, arch)
+    local instance, errors = platform.load(plat, arch)
+    if not instance then
         raise(errors)
     end
+    return instance
 end
 
 -- get the platform os
-function sandbox_core_platform.os()
-    return platform.os()
+function sandbox_core_platform.os(plat, arch)
+    return platform.os(plat, arch)
 end
 
 -- get the all platforms
@@ -45,22 +44,32 @@ function sandbox_core_platform.plats()
     return assert(platform.plats())
 end
 
--- get the all architectures for the given platform
-function sandbox_core_platform.archs(plat)
-    return platform.archs(plat)
+-- get the all toolchains
+function sandbox_core_platform.toolchains()
+    return assert(platform.toolchains())
 end
 
--- get the current platform configure
-function sandbox_core_platform.get(name, plat)
-    return platform.get(name, plat)
+-- get the all architectures for the given platform
+function sandbox_core_platform.archs(plat, arch)
+    return platform.archs(plat, arch)
+end
+
+-- get the current platform configuration
+function sandbox_core_platform.get(name, plat, arch)
+    return platform.get(name, plat, arch)
 end
 
 -- get the platform tool from the kind
 --
 -- e.g. cc, cxx, mm, mxx, as, ar, ld, sh, ..
 --
-function sandbox_core_platform.tool(toolkind)
-    return platform.tool(toolkind)
+function sandbox_core_platform.tool(toolkind, plat, arch)
+    return platform.tool(toolkind, plat, arch)
+end
+
+-- get the current platform tool configuration
+function sandbox_core_platform.toolconfig(name, plat, arch)
+    return platform.toolconfig(name, plat, arch)
 end
 
 -- return module

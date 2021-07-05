@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        repository.lua
@@ -26,9 +26,10 @@ local _instance = _instance or {}
 local utils       = require("base/utils")
 local string      = require("base/string")
 local global      = require("base/global")
-local cache       = require("project/cache")
 local config      = require("project/config")
 local interpreter = require("base/interpreter")
+local localcache  = require("cache/localcache")
+local globalcache = require("cache/globalcache")
 
 -- new an instance
 function _instance.new(name, url, branch, directory, is_global)
@@ -42,8 +43,6 @@ function _instance.new(name, url, branch, directory, is_global)
     instance._BRANCH    = branch
     instance._DIRECTORY = directory
     instance._IS_GLOBAL = is_global
-
-    -- ok
     return instance
 end
 
@@ -53,14 +52,14 @@ function _instance:get(name)
     -- load info
     local info = self:load()
 
-    -- get if from info 
+    -- get if from info
     local value = info and info[name] or nil
     if value ~= nil then
-        return value 
+        return value
     end
 end
 
--- get the repository name 
+-- get the repository name
 function _instance:name()
     return self._NAME
 end
@@ -119,21 +118,11 @@ end
 
 -- get cache
 function repository._cache(is_global)
-
-    -- get position
-    local position = utils.ifelse(is_global, "global", "local")
-
-    -- get it from cache first if exists
-    if repository._CACHE and repository._CACHE[position] then
-        return repository._CACHE[position]
+    if is_global then
+        return globalcache.cache("repository")
+    else
+        return localcache.cache("repository")
     end
-
-    -- init cache
-    repository._CACHE = repository._CACHE or {}
-    repository._CACHE[position] = cache(position .. ".repository")
-
-    -- ok
-    return repository._CACHE[position]
 end
 
 -- the interpreter
@@ -147,21 +136,19 @@ function repository._interpreter()
     -- init interpreter
     local interp = interpreter.new()
     assert(interp)
- 
+
     -- define apis
     interp:api_define(repository.apis())
-    
+
     -- save interpreter
     repository._INTERPRETER = interp
-
-    -- ok?
     return interp
 end
 
 -- get repository apis
 function repository.apis()
 
-    return 
+    return
     {
         values =
         {
@@ -182,8 +169,13 @@ function repository.directory(is_global)
     end
 end
 
--- load the repository 
+-- load the repository
 function repository.load(name, url, branch, is_global)
+
+    -- check url
+    if not url then
+        return nil, string.format("invalid repo(%s): url not found!", name)
+    end
 
     -- get it directly from cache first
     repository._REPOS = repository._REPOS or {}
@@ -192,7 +184,7 @@ function repository.load(name, url, branch, is_global)
     end
 
     -- the repository directory
-    local repodir = os.isdir(url) and url or path.join(repository.directory(is_global), name)
+    local repodir = os.isdir(url) and path.absolute(url) or path.join(repository.directory(is_global), name)
 
     -- new an instance
     local instance, errors = _instance.new(name, url, branch, repodir, is_global)
@@ -202,11 +194,9 @@ function repository.load(name, url, branch, is_global)
 
     -- save instance to the cache
     repository._REPOS[name] = instance
-
-    -- ok
     return instance
 end
-     
+
 -- get repository url from the given name
 function repository.get(name, is_global)
 
@@ -238,9 +228,7 @@ function repository.add(name, url, branch, is_global)
 
     -- save repositories
     repository._cache(is_global):set("repositories", repositories)
-
-    -- flush it
-    repository._cache(is_global):flush()
+    repository._cache(is_global):save()
     return true
 end
 
@@ -248,7 +236,7 @@ end
 function repository.remove(name, is_global)
 
     -- get repositories
-    local repositories = repository.repositories(is_global) or {} 
+    local repositories = repository.repositories(is_global) or {}
     if not repositories[name] then
         return false, string.format("repository(%s): not found!", name)
     end
@@ -258,20 +246,14 @@ function repository.remove(name, is_global)
 
     -- save repositories
     repository._cache(is_global):set("repositories", repositories)
-
-    -- flush it
-    repository._cache(is_global):flush()
+    repository._cache(is_global):save()
     return true
 end
 
 -- clear all repositories
 function repository.clear(is_global)
-
-    -- clear repositories
     repository._cache(is_global):set("repositories", {})
-
-    -- flush it
-    repository._cache(is_global):flush()
+    repository._cache(is_global):save()
     return true
 end
 

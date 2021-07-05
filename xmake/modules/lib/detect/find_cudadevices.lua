@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      OpportunityLiu
 -- @file        find_cudadevices.lua
@@ -22,7 +22,7 @@
 import("core.base.option")
 import("core.platform.platform")
 import("core.project.config")
-import("lib.detect.cache")
+import("core.cache.detectcache")
 import("lib.detect.find_tool")
 
 -- a magic string to filter output
@@ -125,7 +125,7 @@ function _find_devices(verbose)
 
     -- get cuda devices
     local sourcefile = path.join(os.programdir(), "scripts", "find_cudadevices.cpp")
-    local outfile = os.tmpfile()
+    local outfile = os.tmpfile({ramdisk = false}) -- no execution permision in docker's /shm
     local compile_errors = nil
     local results, errors = try
     {
@@ -181,7 +181,7 @@ function _get_devices(opt)
     end
 
     -- check cache
-    local cachedata = cache.load(cachekey)
+    local cachedata = detectcache:get(cachekey) or {}
     if cachedata.succeed and not opt.force then
         return cachedata.data
     end
@@ -196,7 +196,8 @@ function _get_devices(opt)
     end
 
     -- fill cache
-    cache.save(cachekey, cachedata)
+    detectcache:set(cachekey, cachedata)
+    detectcache:save()
     return devices
 end
 
@@ -223,7 +224,7 @@ end
 
 function _order_by_flops(devices)
 
-    local ngpu_arch_cores_per_sm = 
+    local ngpu_arch_cores_per_sm =
     {
         [30] =    192
     ,   [32] =    192
@@ -238,6 +239,7 @@ function _order_by_flops(devices)
     ,   [70] =     64
     ,   [72] =     64
     ,   [75] =     64
+    ,   [80] =     64
     }
 
     for _, dev in ipairs(devices) do

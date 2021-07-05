@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        link.lua
@@ -24,7 +24,7 @@ import("private.tools.vstool")
 
 -- init it
 function init(self)
-   
+
     -- init ldflags
     self:set("ldflags", "-nologo", "-dynamicbase", "-nxcompat")
 
@@ -40,7 +40,7 @@ function init(self)
         -- strip
         ["-s"]                  = ""
     ,   ["-S"]                  = ""
- 
+
         -- others
     ,   ["-ftrapv"]             = ""
     ,   ["-fsanitize=address"]  = ""
@@ -51,27 +51,44 @@ end
 function get(self, name)
     local values = self._INFO[name]
     if name == "ldflags" or name == "arflags" or name == "shflags" then
-        -- switch architecture, @note does cache it in init() for generating vs201x project 
-        values = table.join(values, "-machine:" .. (config.arch() or "x86"))
+        -- switch architecture, @note does cache it in init() for generating vs201x project
+        values = table.join(values, "-machine:" .. (self:arch() or "x86"))
     end
     return values
 end
 
+-- make the strip flag
+function nf_strip(self, level, target)
+    -- @note we explicitly strip some useless code, because `/debug` may keep them
+    -- @see https://github.com/xmake-io/xmake/issues/907
+    if level == "all" then
+        -- we enable /ltcg for optimize/smallest:/Gl
+        local flags = {"/opt:ref", "/opt:icf"}
+        if target and target:get("optimize") == "smallest" then
+            table.insert(flags, "/ltcg")
+        end
+        return flags
+    elseif level == "debug" then
+        return {"/opt:ref", "/opt:icf"}
+    end
+end
+
 -- make the symbol flag
 function nf_symbol(self, level, target)
-    
+
     -- debug? generate *.pdb file
     local flags = nil
-    local targetkind = target:get("kind")
-    if level == "debug" and (targetkind == "binary" or targetkind == "shared") then
-        if target and target.symbolfile then
-            flags = "-debug -pdb:" .. target:symbolfile()
-        else
-            flags = "-debug"
+    if target then
+        if target:type() == "target" then
+            if level == "debug" and (target:is_binary() or target:is_shared()) then
+                flags = {"-debug", "-pdb:" .. target:symbolfile()}
+            end
+        else -- for option
+            if level == "debug" then
+                flags = "-debug"
+            end
         end
     end
-
-    -- none
     return flags
 end
 
@@ -85,24 +102,30 @@ function nf_syslink(self, lib)
     return nf_link(self, lib)
 end
 
+-- make vs runtime flag
+function nf_runtime(self, vs_runtime)
+    if vs_runtime and vs_runtime:startswith("MT") then
+        return "-nodefaultlib:msvcrt.lib"
+    end
+end
+
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-libpath:" .. os.args(path.translate(dir))
+    return {"-libpath:" .. path.translate(dir)}
 end
 
 -- make the link arguments list
 function linkargv(self, objectfiles, targetkind, targetfile, flags, opt)
-
-    -- init arguments
-    local argv = table.join(flags, "-out:" .. os.args(targetfile), objectfiles)
-
-    -- too long arguments for windows? 
     opt = opt or {}
-    local args = os.args(argv, {escape = true})
-    if #args > 1024 and not opt.rawargs then
-        local argsfile = os.tmpfile(args) .. ".args.txt" 
-        io.writefile(argsfile, args)
-        argv = {"@" .. argsfile}
+    local argv = table.join(flags, "-out:" .. targetfile, objectfiles)
+    if not opt.rawargs then
+        argv = winos.cmdargv(argv)
+    end
+    -- @note we cannot put -lib/-dll to @args.txt
+    if targetkind == "static" then
+        table.insert(argv, 1, "-lib")
+    elseif targetkind == "shared" then
+        table.insert(argv, 1, "-dll")
     end
     return self:program(), argv
 end
@@ -116,9 +139,10 @@ function link(self, objectfiles, targetkind, targetfile, flags, opt)
     try
     {
         function ()
-    
+
             -- use vstool to link and enable vs_unicode_output @see https://github.com/xmake-io/xmake/issues/528
-            vstool.runv(linkargv(self, objectfiles, targetkind, targetfile, flags, opt))
+            local program, argv = linkargv(self, objectfiles, targetkind, targetfile, flags, opt)
+            vstool.runv(program, argv, {envs = self:runenvs()})
         end,
         catch
         {

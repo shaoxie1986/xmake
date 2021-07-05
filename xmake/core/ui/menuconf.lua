@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        menuconf.lua
@@ -40,18 +40,146 @@ function menuconf:init(name, bounds)
 
     -- init configs
     self._CONFIGS = {}
+
+    -- init items
+    self._ITEMS = {}
+
+    -- init start index
+    self._STARTINDEX = 1
+end
+
+-- load configs
+function menuconf:load(configs)
+
+    -- clear the views first
+    self:clear()
+
+    -- reset start index
+    self._STARTINDEX = 1
+
+    -- detach the previous config and view
+    local configs_prev = self._CONFIGS._PREV
+    if configs_prev then
+        for _, config in ipairs(configs_prev) do
+            config._view = nil
+        end
+    end
+
+    -- save configs
+    self._CONFIGS = configs
+
+    -- load items
+    local items = {}
+    for idx, config in ipairs(configs) do
+        table.insert(items, self:_load_item(config, idx))
+    end
+    self._ITEMS = items
+
+    -- insert top-n items
+    local startindex = self._STARTINDEX
+    for idx = startindex, startindex + self:height() - 1 do
+        local item = items[idx]
+        if item then
+            self:insert(item)
+        else
+            break
+        end
+    end
+
+    -- select the first item
+    self:select(self:first())
+
+    -- on loaded
+    self:action_on(action.ac_on_load)
+
+    -- invalidate
+    self:invalidate()
+end
+
+-- is scrollable?
+function menuconf:scrollable()
+    return #self:_items() > self:height()
+end
+
+-- scroll
+function menuconf:scroll(count)
+    if self:scrollable() then
+        local items = self:_items()
+        local totalcount = #items
+        local startindex = self._STARTINDEX + count
+        if startindex > totalcount then
+            return
+        elseif startindex < 1 then
+            startindex = 1
+        end
+        self._STARTINDEX = startindex
+        self:clear()
+        for idx = startindex, startindex + self:height() - 1 do
+            local item = items[idx]
+            if item then
+                item:bounds():move2(0, idx - startindex)
+                self:insert(item)
+            else
+                break
+            end
+        end
+        if count > 0 then
+            self:select(self:first())
+        else
+            self:select(self:last())
+        end
+        self:invalidate()
+    end
+end
+
+-- on resize
+function menuconf:on_resize()
+    local items = self:_items()
+    local totalcount = #items
+    local startindex = self._STARTINDEX
+    for idx = 1, totalcount do
+        local item = items[idx]
+        if item then
+            if idx >= startindex and idx < startindex + self:height() then
+                if not self:view(item:name()) then
+                    item:bounds():move2(0, idx - startindex)
+                    self:insert(item)
+                end
+            else
+                if self:view(item:name()) then
+                    self:remove(item)
+                end
+            end
+        end
+    end
+    panel.on_resize(self)
 end
 
 -- on event
-function menuconf:event_on(e)
- 
-    -- select config
+function menuconf:on_event(e)
     local back = false
     if e.type == event.ev_keyboard then
         if e.key_name == "Down" then
-            return self:select_next()
+            if self:current() == self:last() then
+                self:scroll(self:height())
+            else
+                self:select_next()
+            end
+            self:_notify_scrolled()
+            return true
         elseif e.key_name == "Up" then
-            return self:select_prev()
+            if self:current() == self:first() then
+                self:scroll(-self:height())
+            else
+                self:select_prev()
+            end
+            self:_notify_scrolled()
+            return true
+        elseif e.key_name == "PageDown" or e.key_name == "PageUp" then
+            local direction = e.key_name == "PageDown" and 1 or -1
+            self:scroll(self:height() * direction)
+            self:_notify_scrolled()
+            return true
         elseif e.key_name == "Enter" or e.key_name == " " then
             self:_do_select()
             return true
@@ -71,7 +199,7 @@ function menuconf:event_on(e)
         elseif e.command == "cm_back" then
             back = true
         end
-    end  
+    end
 
     -- back?
     if back then
@@ -85,49 +213,36 @@ function menuconf:event_on(e)
     end
 end
 
--- load configs
-function menuconf:load(configs)
-
-    -- clear the views first
-    self:clear()
-
-    -- detach the previous config and view
-    local configs_prev = self._CONFIGS._PREV
-    if configs_prev then
-        for _, config in ipairs(configs_prev) do
-            config._view = nil
-        end
-    end
-
-    -- insert configs
-    self._CONFIGS = configs
-    for _, config in ipairs(configs) do
-        if self:count() < self:height() then
-            self:_do_insert(config)
-        end
-    end
-
-    -- select the first item
-    self:select(self:first())
-
-    -- invalidate
-    self:invalidate()
-end
-
--- do insert a config item
-function menuconf:_do_insert(config)
+-- load a config item
+function menuconf:_load_item(config, index)
 
     -- init a config item view
-    local item = button:new("menuconf.config." .. self:count(), rect:new(0, self:count(), self:width(), 1), tostring(config))
+    local item = button:new("menuconf.config." .. index,
+                    rect:new(0, index - 1, self:width(), 1),
+                    tostring(config),
+                    function (v, e)
+                        self:_do_select()
+                    end)
 
-    -- attach this config
+    -- attach this index and config
+    item:extra_set("index", index)
     item:extra_set("config", config)
 
     -- attach this view
     config._view = item
+    return item
+end
 
-    -- insert this config item
-    self:insert(item)
+-- notify scrolled
+function menuconf:_notify_scrolled()
+    local totalcount = #self:_items()
+    local startindex = self:current():extra("index")
+    self:action_on(action.ac_on_scrolled, startindex / totalcount)
+end
+
+-- get all items
+function menuconf:_items()
+    return self._ITEMS
 end
 
 -- do select the current config
@@ -135,19 +250,19 @@ function menuconf:_do_select()
 
     -- get the current item
     local item = self:current()
-    
+
     -- get the current config
     local config = item:extra("config")
 
-    -- clear new state    
+    -- clear new state
     config.new = false
 
     -- do action: on selected
     if self:action_on(action.ac_on_selected, config) then
-        return 
+        return
     end
 
-    -- select the boolean config 
+    -- select the boolean config
     if config.kind == "boolean" then
         config.value = not config.value
     -- show sub-menu configs
@@ -163,14 +278,14 @@ function menuconf:_do_include(enabled)
 
     -- get the current item
     local item = self:current()
-    
+
     -- get the current config
     local config = item:extra("config")
 
-    -- clear new state    
+    -- clear new state
     config.new = false
 
-    -- select the boolean config 
+    -- select the boolean config
     if config.kind == "boolean" then
         config.value = enabled
     end
@@ -200,7 +315,7 @@ end
 -- menu config
 --  - {name = "...", kind = "menu", description = "menu config item", configs = {...}}
 --
-local config = config or object{new = true, 
+local config = config or object{new = true,
                                 __index = function (tbl, key)
                                     if key == "value" then
                                         local val = rawget(tbl, "_value")
@@ -222,7 +337,7 @@ local config = config or object{new = true,
                                             v:text_set(tostring(tbl))
                                         end
                                     end
-                                end} 
+                                end}
 
 -- the prompt info
 function config:prompt()
@@ -243,12 +358,12 @@ function config:__tostring()
 
     -- get value
     local value = self.value
-    
+
     -- update text
     if self.kind == "boolean" or (not self.kind and type(value) == "boolean") then -- boolean config?
         text = (value and "[*] " or "[ ] ") .. text
     elseif self.kind == "number" or (not self.kind and type(value) == "number") then -- number config?
-        text = "    " .. text .. " (" .. tostring(value or 0) .. ")" 
+        text = "    " .. text .. " (" .. tostring(value or 0) .. ")"
     elseif self.kind == "string" or (not self.kind and type(value) == "string") then -- string config?
         text = "    " .. text .. " (" .. tostring(value or "") .. ")"
     elseif self.kind == "choice" then -- choice config?

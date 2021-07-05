@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        os.lua
@@ -39,6 +39,7 @@ os._rmdir       = os._rmdir or os.rmdir
 os._tmpdir      = os._tmpdir or os.tmpdir
 os._setenv      = os._setenv or os.setenv
 os._getenvs     = os._getenvs or os.getenvs
+os._cpuinfo     = os._cpuinfo or os.cpuinfo
 os._readlink    = os._readlink or os.readlink
 
 -- syserror code
@@ -59,7 +60,7 @@ function os._cp(src, dst, rootdir)
             src = path.absolute(src)
         end
         if not src:startswith(rootdir) then
-            return false, string.format("cannot copy file %s to %s, error: invalid rootdir(%s)", src, dst, rootdir)
+            return false, string.format("cannot copy file %s to %s, invalid rootdir(%s)", src, dst, rootdir)
         end
     end
 
@@ -77,7 +78,7 @@ function os._cp(src, dst, rootdir)
 
         -- copy file
         if not os.cpfile(src, dst) then
-            return false, string.format("cannot copy file %s to %s, error: %s", src, dst, os.strerror())
+            return false, string.format("cannot copy file %s to %s, %s", src, dst, os.strerror())
         end
     -- is directory?
     elseif os.isdir(src) then
@@ -93,12 +94,12 @@ function os._cp(src, dst, rootdir)
 
         -- copy directory
         if not os.cpdir(src, dst) then
-            return false, string.format("cannot copy directory %s to %s, error:  %s", src, dst, os.strerror())
+            return false, string.format("cannot copy directory %s to %s,  %s", src, dst, os.strerror())
         end
 
     -- not exists?
     else
-        return false, string.format("cannot copy file %s, error: not found this file", src)
+        return false, string.format("cannot copy file %s, file not found!", src)
     end
 
     -- ok
@@ -125,7 +126,7 @@ function os._mv(src, dst)
         end
     -- not exists?
     else
-        return false, string.format("cannot move %s to %s, not found this file %s", src, dst, os.strerror())
+        return false, string.format("cannot move %s to %s, file %s not found!", src, dst, os.strerror())
     end
 
     -- ok
@@ -180,17 +181,29 @@ function os._ramdir()
     return ramdir_root or nil
 end
 
+-- set on change environments callback for scheduler
+function os._sched_chenvs_set(envs)
+    os._SCHED_CHENVS = envs
+end
+
 -- set on change directory callback for scheduler
 function os._sched_chdir_set(chdir)
     os._SCHED_CHDIR = chdir
+end
+
+-- notify envs have been changed
+function os._notify_envs_changed(envs)
+    if os._SCHED_CHENVS then
+        os._SCHED_CHENVS(envs)
+    end
 end
 
 -- the current host is belong to the given hosts?
 function os._is_host(host, ...)
 
     -- no host
-    if not host then 
-        return false 
+    if not host then
+        return false
     end
 
     -- exists this host? and escape '-'
@@ -205,8 +218,8 @@ end
 function os._is_arch(arch, ...)
 
     -- no arch
-    if not arch then 
-        return false 
+    if not arch then
+        return false
     end
 
     -- exists this architecture? and escape '-'
@@ -257,11 +270,7 @@ function os.match(pattern, mode, callback)
         local _excludes = {}
         for _, exclude in ipairs(excludes) do
             exclude = path.translate(exclude)
-            exclude = exclude:gsub("([%+%.%-%^%$%(%)%%])", "%%%1")
-            exclude = exclude:gsub("%*%*", "\001")
-            exclude = exclude:gsub("%*", "\002")
-            exclude = exclude:gsub("\001", ".*")
-            exclude = exclude:gsub("\002", "[^/]*")
+            exclude = path.pattern(exclude)
             table.insert(_excludes, exclude)
         end
         excludes = _excludes
@@ -434,11 +443,8 @@ end
 
 -- link file or directory to the new symfile
 function os.ln(srcpath, dstpath)
-    if os.host() == "windows" then
-        return false, string.format("symlink is not supported!")
-    end
     if not os.link(srcpath, dstpath) then
-        return false, string.format("cannot link %s to %s, error: %s", srcpath, dstpath, os.strerror())
+        return false, string.format("cannot link %s to %s, %s", srcpath, dstpath, os.strerror())
     end
     return true
 end
@@ -482,7 +488,7 @@ function os.cd(dir)
 
     -- do chdir callback for scheduler
     if os._SCHED_CHDIR then
-        os._SCHED_CHDIR(oldir, os.curdir())
+        os._SCHED_CHDIR(os.curdir())
     end
 
     -- ok
@@ -501,7 +507,7 @@ function os.mkdir(dir)
     local dirs = table.wrap(os._match_wildcard_pathes(dir))
     for _, _dir in ipairs(dirs) do
         if not os._mkdir(_dir) then
-            return false, string.format("cannot create directory: %s, error: %s", _dir, os.strerror())
+            return false, string.format("cannot create directory: %s, %s", _dir, os.strerror())
         end
     end
     return true
@@ -519,7 +525,7 @@ function os.rmdir(dir)
     local dirs = table.wrap(os._match_wildcard_pathes(dir))
     for _, _dir in ipairs(dirs) do
         if not os._rmdir(_dir) then
-            return false, string.format("cannot remove directory: %s, error: %s", _dir, os.strerror())
+            return false, string.format("cannot remove directory: %s, %s", _dir, os.strerror())
         end
     end
     return true
@@ -555,7 +561,8 @@ function os.tmpdir(opt)
     -- make sub-directory name
     local subdir = os._TMPSUBDIR
     if not subdir then
-        subdir = path.join((os._FAKEROOT and ".xmakefake" or ".xmake") .. (os.uid().euid or ""), os.date("%y%m%d"))
+        local name = "." .. xmake._NAME
+        subdir = path.join((os._FAKEROOT and (name .. "fake") or name) .. (os.uid().euid or ""), os.date("%y%m%d"))
         os._TMPSUBDIR = subdir
     end
 
@@ -569,7 +576,7 @@ end
 
 -- generate the temporary file path
 --
--- e.g. 
+-- e.g.
 -- os.tmpfile("key")
 -- os.tmpfile({key = "xxx", ramdisk = false})
 --
@@ -580,7 +587,7 @@ function os.tmpfile(opt_or_key)
         key = opt_or_key.key
         opt = opt_or_key
     end
-    return path.join(os.tmpdir(opt), "_" .. (hash.uuid4(key):gsub("-", "")))                                                        
+    return path.join(os.tmpdir(opt), "_" .. (hash.uuid4(key):gsub("-", "")))
 end
 
 -- exit program
@@ -629,7 +636,7 @@ function os.runv(program, argv, opt)
                 errors = string.format("runv(%s) failed(%d)", cmd, ok)
             end
         else
-            errors = string.format("cannot runv(%s), error: %s", cmd, errors and errors or "unknown")
+            errors = string.format("cannot runv(%s), %s", cmd, errors and errors or "unknown reason")
         end
 
         -- remove the temporary log file
@@ -664,7 +671,7 @@ end
 -- @param program     "clang", "xcrun -sdk macosx clang", "~/dir/test\ xxx/clang"
 --        filename    "clang", "xcrun"", "~/dir/test\ xxx/clang"
 -- @param argv        the arguments
--- @param opt         the options, e.g. {stdout = filepath/file/pipe, stderr = filepath/file/pipe,
+-- @param opt         the options, e.g. {stdin = filepath/file/pipe, stdout = filepath/file/pipe, stderr = filepath/file/pipe,
 --                                       envs = {PATH = "xxx;xx", CFLAGS = "xx"}}
 --
 function os.execv(program, argv, opt)
@@ -689,6 +696,9 @@ function os.execv(program, argv, opt)
     if opt.envs then
         local envars = os.getenvs()
         for k, v in pairs(opt.envs) do
+            if type(v) == "table" then
+                v = path.joinenv(v)
+            end
             envars[k] = v
         end
         envs = {}
@@ -698,7 +708,7 @@ function os.execv(program, argv, opt)
     end
 
     -- init open options
-    local openopt = {envs = envs, stdout = opt.stdout, stderr = opt.stderr}
+    local openopt = {envs = envs, stdin = opt.stdin, stdout = opt.stdout, stderr = opt.stderr, curdir = opt.curdir, detach = opt.detach}
 
     -- open command
     local ok = -1
@@ -752,7 +762,7 @@ function os.iorunv(program, argv, opt)
         if argv then
             cmd = cmd .. " " .. os.args(argv)
         end
-        errors = string.format("cannot runv(%s), error: %s", cmd, errors and errors or "unknown")
+        errors = string.format("cannot runv(%s), %s", cmd, errors and errors or "unknown reason")
     end
 
     -- get output and error data
@@ -762,8 +772,6 @@ function os.iorunv(program, argv, opt)
     -- remove the temporary output and error file
     os.rm(outfile)
     os.rm(errfile)
-
-    -- ok?
     return ok == 0, outdata, errdata, errors
 end
 
@@ -817,15 +825,17 @@ function os.isexec(filepath)
     -- TODO
     -- check permission
 
-    -- is *.exe for windows?
+    -- check executable program exist
+    if os.isfile(filepath) then
+        return true
+    end
     if os.host() == "windows" then
-        if not filepath:endswith(".exe") and not filepath:endswith(".cmd") and not filepath:endswith(".bat") then
-            filepath = filepath .. ".exe"
+        for _, suffix in ipairs({".exe", ".cmd", ".bat"}) do
+            if os.isfile(filepath .. suffix) then
+                return true
+            end
         end
     end
-
-    -- file exists?
-    return os.isfile(filepath)
 end
 
 -- get system host
@@ -971,7 +981,18 @@ function os.fscase()
     return os._FSCASE
 end
 
+-- get shell
+function os.shell()
+    return require("base/tty").shell()
+end
+
+-- get term
+function os.term()
+    return require("base/tty").term()
+end
+
 -- get all current environment variables
+-- e.g. envs["PATH"] = "/xxx:/yyy/foo"
 function os.getenvs()
     local envs = {}
     for _, line in ipairs(os._getenvs()) do
@@ -990,28 +1011,119 @@ function os.getenvs()
     return envs
 end
 
+-- set all current environment variables
+-- e.g. envs["PATH"] = "/xxx:/yyy/foo"
+function os.setenvs(envs)
+    local oldenvs = os.getenvs()
+    if envs then
+        local changed = false
+        -- remove new added values
+        for name, _ in pairs(oldenvs) do
+            if not envs[name] then
+                if os._setenv(name, "") then
+                    changed = true
+                end
+            end
+        end
+        -- change values
+        for name, values in pairs(envs) do
+            if oldenvs[name] ~= values then
+                if os._setenv(name, values) then
+                    changed = true
+                end
+            end
+        end
+        if changed then
+            os._notify_envs_changed(envs)
+        end
+    end
+    return oldenvs
+end
+
+-- add environment variables
+-- e.g. envs["PATH"] = "/xxx:/yyy/foo"
+function os.addenvs(envs)
+    local oldenvs = os.getenvs()
+    if envs then
+        local changed = false
+        for name, values in pairs(envs) do
+            local ok
+            local oldenv = oldenvs[name]
+            if oldenv == "" or oldenv == nil then
+                ok = os._setenv(name, values)
+            elseif not oldenv:startswith(values) then
+                ok = os._setenv(name, values .. path.envsep() .. oldenv)
+            end
+            if ok then
+                changed = true
+            end
+        end
+        if changed then
+            os._notify_envs_changed()
+        end
+    end
+    return oldenvs
+end
+
+-- join environment variables
+function os.joinenvs(envs, oldenvs)
+    oldenvs = oldenvs or os.getenvs()
+    local newenvs = oldenvs
+    if envs then
+        newenvs = table.copy(oldenvs)
+        for name, values in pairs(envs) do
+            local oldenv = oldenvs[name]
+            if oldenv == "" or oldenv == nil then
+                newenvs[name] = values
+            elseif not oldenv:startswith(values) then
+                newenvs[name] = values .. path.envsep() .. oldenv
+            end
+        end
+    end
+    return newenvs
+end
+
 -- set values to environment variable
 function os.setenv(name, ...)
+    local ok
     local values = {...}
     if #values <= 1 then
         -- keep compatible with original implementation
-        return os._setenv(name, values[1] or "")
+        ok = os._setenv(name, values[1] or "")
     else
-        return os._setenv(name, path.joinenv(values))
+        ok = os._setenv(name, path.joinenv(values))
     end
+    if ok then
+        os._notify_envs_changed()
+    end
+    return ok
 end
 
 -- add values to environment variable
 function os.addenv(name, ...)
     local values = {...}
     if #values > 0 then
+        local ok
+        local changed = false
         local oldenv = os.getenv(name)
         local appendenv = path.joinenv(values)
         if oldenv == "" or oldenv == nil then
-            return os._setenv(name, appendenv)
+            ok = os._setenv(name, appendenv)
+            if ok then
+                changed = true
+            end
+        elseif not oldenv:startswith(appendenv) then
+            ok = os._setenv(name, appendenv .. path.envsep() .. oldenv)
+            if ok then
+                changed = true
+            end
         else
-            return os._setenv(name, appendenv .. path.envsep() .. oldenv)
+            ok = true
         end
+        if changed then
+            os._notify_envs_changed()
+        end
+        return ok
     else
         return true
     end
@@ -1020,7 +1132,11 @@ end
 -- set values to environment variable with the given seperator
 function os.setenvp(name, values, sep)
     sep = sep or path.envsep()
-    return os._setenv(name, table.concat(table.wrap(values), sep))
+    local ok = os._setenv(name, table.concat(table.wrap(values), sep))
+    if ok then
+        os._notify_envs_changed()
+    end
+    return ok
 end
 
 -- add values to environment variable with the given seperator
@@ -1028,13 +1144,27 @@ function os.addenvp(name, values, sep)
     sep = sep or path.envsep()
     values = table.wrap(values)
     if #values > 0 then
+        local ok
+        local changed = false
         local oldenv = os.getenv(name)
         local appendenv = table.concat(values, sep)
         if oldenv == "" or oldenv == nil then
-            return os._setenv(name, appendenv)
+            ok = os._setenv(name, appendenv)
+            if ok then
+                changed = true
+            end
+        elseif not oldenv:startswith(appendenv) then
+            ok = os._setenv(name, appendenv .. sep .. oldenv)
+            if ok then
+                changed = true
+            end
         else
-            return os._setenv(name, appendenv .. sep .. oldenv)
+            ok = true
         end
+        if changed then
+            os._notify_envs_changed()
+        end
+        return ok
     else
         return true
     end
@@ -1066,6 +1196,11 @@ function os.pbcopy(data)
     else
         -- TODO
     end
+end
+
+-- get cpu info
+function os.cpuinfo(name)
+    return require("base/cpu").info(name)
 end
 
 -- read the content of symlink

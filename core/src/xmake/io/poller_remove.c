@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        poller_remove.c
@@ -41,8 +41,8 @@ tb_int_t xm_io_poller_remove(lua_State* lua)
     // check
     tb_assert_and_check_return_val(lua, 0);
 
-    // is user data?
-    if (!lua_isuserdata(lua, 2)) 
+    // is pointer?
+    if (!xm_lua_ispointer(lua, 2))
     {
         lua_pushboolean(lua, tb_false);
         lua_pushfstring(lua, "invalid poller object!");
@@ -53,7 +53,7 @@ tb_int_t xm_io_poller_remove(lua_State* lua)
     tb_uint8_t otype = (tb_uint8_t)luaL_checknumber(lua, 1);
 
     // get cdata
-    tb_pointer_t cdata = (tb_pointer_t)lua_touserdata(lua, 2);
+    tb_pointer_t cdata = (tb_pointer_t)xm_lua_topointer(lua, 2);
     tb_check_return_val(cdata, 0);
 
     // remove events from poller

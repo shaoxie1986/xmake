@@ -76,9 +76,10 @@ luajit_C_FILES 			+= \
 						luajit/src/lj_buf \
 						luajit/src/lj_strfmt \
 						luajit/src/lj_strfmt_num \
-						luajit/src/lj_profile
+						luajit/src/lj_profile \
+						luajit/src/lj_prng
 
-# asm files
+# is windows?
 iswin =
 ifeq ($(PLAT),windows)
 	iswin = yes
@@ -86,31 +87,63 @@ endif
 ifeq ($(PLAT),msys)
 	iswin = yes
 endif
+ifeq ($(PLAT),mingw)
+	iswin = yes
+endif
 ifeq ($(PLAT),cygwin)
 	iswin = yes
 endif
 
+# autogen plat and BUILD_ARCH
+GENPLAT := $(PLAT)
+GENARCH := $(BUILD_ARCH)
+
+# asm files
 ifdef iswin
+ifeq ($(BUILD_ARCH),x86_64)
+GENARCH := x64
+endif
+ifeq ($(BUILD_ARCH),i386)
+GENARCH := x86
+endif
+GENPLAT := windows
 luajit_OBJ_FILES 		+= \
-						autogen/$(PLAT)/$(luajit_JIT)/$(ARCH)/lj_vm
+						autogen/$(GENPLAT)/$(luajit_JIT)/$(GENARCH)/lj_vm
 else
 luajit_ASM_FILES 		+= \
-						autogen/$(PLAT)/$(luajit_JIT)/$(ARCH)/lj_vm
+						autogen/$(GENPLAT)/$(luajit_JIT)/$(GENARCH)/lj_vm
 endif
 
 # includes
 luajit_INC_DIRS 		+= \
-						autogen/$(PLAT)/$(luajit_JIT)/$(ARCH)
+						autogen/$(GENPLAT)/$(luajit_JIT)/$(GENARCH)
 
 # disable jit compiler
 ifeq ($(luajit_JIT),nojit)
 luajit_CXFLAGS 			+= -DLUAJIT_DISABLE_JIT
 endif
+luajit_CXFLAGS 			+= -Wno-error=unused-function
 
-# enable lua5.2 compat, @see http://luajit.org/extensions.html
-#luajit_CXFLAGS 			+= -DLUAJIT_ENABLE_LUA52COMPAT -Wno-error=unused-function
+# using internal memory management under armv7, gc will cause a crash when free strings in lua_close()
+ifeq ($(BUILD_ARCH),arm)
+luajit_CXFLAGS 			+= -DLUAJIT_USE_SYSMALLOC
+endif
 
-										
+# fix call math.sin/log crash for fedora/i386/lj_vm.S with `LDFLAGS = -specs=/usr/lib/rpm/redhat/redhat-hardened-ld` in xmake.spec/%set_build_flags
+ifndef iswin
+ifeq ($(BUILD_ARCH),i386)
+luajit_ASFLAGS 			+= -fPIE
+luajit_CXFLAGS 			+= -fPIE
+endif
+endif
+
+# use given system library?
+luajit_C_FILES 			:= $(if $(findstring luajit,$(base_LIBNAMES)),,$(luajit_C_FILES))
+luajit_ASM_FILES 		:= $(if $(findstring luajit,$(base_LIBNAMES)),,$(luajit_ASM_FILES))
+luajit_INC_FILES 		:= $(if $(findstring luajit,$(base_LIBNAMES)),,$(luajit_INC_FILES))
+luajit_OBJ_FILES 		:= $(if $(findstring luajit,$(base_LIBNAMES)),,$(luajit_OBJ_FILES))
+
+
 # suffix
 include $(PRO_DIR)/suffix.mak
 

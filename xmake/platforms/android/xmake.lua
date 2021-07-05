@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -28,7 +28,7 @@ platform("android")
     set_hosts("macosx", "linux", "windows")
 
     -- set archs, we use the latest android abi provided in android ndk now.
-    -- we will continue to support the old abi architectures for old version ndk. 
+    -- we will continue to support the old abi architectures for old version ndk.
     -- e.g. armv5te(armeabi), armv7-a(armeabi-v7a), mips, mips64, i386
     --
     -- @see https://developer.android.google.cn/ndk/guides/abis
@@ -37,18 +37,18 @@ platform("android")
     set_archs("armeabi", "armeabi-v7a", "arm64-v8a", "x86", "x86_64", "mips", "mip64")
 
     -- set formats
-    set_formats {static = "lib$(name).a", object = "$(name).o", shared = "lib$(name).so", symbol = "$(name).sym"}
+    set_formats("static", "lib$(name).a")
+    set_formats("object", "$(name).o")
+    set_formats("shared", "lib$(name).so")
+    set_formats("symbol", "$(name).sym")
 
-    -- on check project configuration
-    on_config_check("config")
-
-    -- on load
-    on_load("load")
+    -- set toolchains
+    set_toolchains("envs", "ndk", "rust")
 
     -- set menu
     set_menu {
-                config = 
-                {   
+                config =
+                {
                     {category = "Android Configuration"                                                 }
                 ,   {nil, "ndk",            "kv", nil,          "The NDK Directory"                     }
                 ,   {nil, "ndk_sdkver",     "kv", "auto",       "The SDK Version for NDK"               }
@@ -56,16 +56,16 @@ platform("android")
                 ,   {nil, "build_toolver",  "kv", nil,          "The Build Tool Version of Android SDK" }
                 ,   {nil, "ndk_stdcxx",     "kv", true,         "Use stdc++ library for NDK"            }
                 ,   {nil, "ndk_cxxstl",     "kv", nil,          "The stdc++ stl library for NDK",
-                                                                "    - gnustl_shared",
+                                                                "    - c++_static",
+                                                                "    - c++_shared",
                                                                 "    - gnustl_static",
-                                                                "    - llvmstl_shared",
-                                                                "    - llvmstl_static",
+                                                                "    - gnustl_shared",
                                                                 "    - stlport_shared",
                                                                 "    - stlport_static"                  }
                 }
 
-            ,   global = 
-                {   
+            ,   global =
+                {
                     {category = "Android Configuration"                                                 }
                 ,   {nil, "ndk",            "kv", nil,          "The NDK Directory"                     }
                 ,   {nil, "ndk_sdkver",     "kv", "auto",       "The SDK Version for NDK"               }

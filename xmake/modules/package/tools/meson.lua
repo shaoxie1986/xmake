@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        meson.lua
@@ -21,23 +21,62 @@
 -- imports
 import("core.base.option")
 import("core.project.config")
+import("core.tool.toolchain")
+import("package.tools.ninja")
 
 -- get build directory
-function _get_buildir()
-    _g.buildir = _g.buildir or ("build_" .. hash.uuid4():split('%-')[1])
-    return _g.buildir
+function _get_buildir(opt)
+    if opt and opt.buildir then
+        return opt.buildir
+    else
+        _g.buildir = _g.buildir or ("build_" .. hash.uuid4():split('%-')[1])
+        return _g.buildir
+    end
 end
 
 -- get configs
-function _get_configs(package, configs)
+function _get_configs(package, configs, opt)
 
     -- add prefix
-    local configs = configs or {}
+    configs = configs or {}
     table.insert(configs, "--prefix=" .. package:installdir())
+    table.insert(configs, "--libdir=lib")
+
+    -- set build type
+    table.insert(configs, "--buildtype=" .. (package:debug() and "debug" or "release"))
+
+    -- add -fpic
+    if package:is_plat("linux") and package:config("pic") then
+        table.insert(configs, "-Db_staticpic=true")
+    end
+
+    -- add vs_runtime flags
+    if package:is_plat("windows") then
+        table.insert(configs, "-Db_vscrt=" .. package:config("vs_runtime"):lower())
+    end
 
     -- add build directory
-    table.insert(configs, _get_buildir())
+    table.insert(configs, _get_buildir(opt))
     return configs
+end
+
+-- get msvc
+function _get_msvc(package)
+    local msvc = toolchain.load("msvc", {plat = package:plat(), arch = package:arch()})
+    assert(msvc:check(), "vs not found!") -- we need check vs envs if it has been not checked yet
+    return msvc
+end
+
+-- get msvc run environments
+function _get_msvc_runenvs(package)
+    return os.joinenvs(_get_msvc(package):runenvs())
+end
+
+-- fix libname on windows
+function _fix_libname_on_windows(package)
+    for _, lib in ipairs(os.files(path.join(package:installdir("lib"), "lib*.a"))) do
+        os.mv(lib, lib:gsub("(.+)lib(.-)%.a", "%1%2.lib"))
+    end
 end
 
 -- get the build environments
@@ -49,6 +88,9 @@ function buildenvs(package)
         envs.CFLAGS    = table.concat(cflags, ' ')
         envs.CXXFLAGS  = table.concat(cxxflags, ' ')
         envs.ASFLAGS   = table.concat(table.wrap(package:config("asflags")), ' ')
+        if package:is_plat("windows") then
+            envs = os.joinenvs(envs, _get_msvc_runenvs(package))
+        end
     else
         local cflags   = table.join(table.wrap(package:build_getenv("cxflags")), package:build_getenv("cflags"))
         local cxxflags = table.join(table.wrap(package:build_getenv("cxflags")), package:build_getenv("cxxflags"))
@@ -73,6 +115,10 @@ function buildenvs(package)
         if os.isdir(pkgconfig) then
             table.insert(PKG_CONFIG_PATH, pkgconfig)
         end
+        pkgconfig = path.join(dep:installdir(), "share", "pkgconfig")
+        if os.isdir(pkgconfig) then
+            table.insert(PKG_CONFIG_PATH, pkgconfig)
+        end
         local aclocal = path.join(dep:installdir(), "share", "aclocal")
         if os.isdir(aclocal) then
             table.insert(ACLOCAL_PATH, aclocal)
@@ -91,7 +137,7 @@ function generate(package, configs, opt)
 
     -- pass configurations
     local argv = {}
-    for name, value in pairs(_get_configs(package, configs)) do
+    for name, value in pairs(_get_configs(package, configs, opt)) do
         value = tostring(value):trim()
         if value ~= "" then
             if type(name) == "number" then
@@ -106,19 +152,31 @@ function generate(package, configs, opt)
     os.vrunv("meson", argv, {envs = opt.envs or buildenvs(package)})
 end
 
+-- build package
+function build(package, configs, opt)
+
+    -- generate build files
+    opt = opt or {}
+    generate(package, configs, opt)
+
+    -- do build
+    local buildir = _get_buildir(opt)
+    ninja.build(package, {}, {buildir = buildir, envs = opt.envs or buildenvs(package, opt)})
+end
+
 -- install package
 function install(package, configs, opt)
 
     -- generate build files
+    opt = opt or {}
     generate(package, configs, opt)
 
     -- do build and install
-    local buildir = _get_buildir()
-    if option.get("verbose") or option.get("diagnosis") then
-        os.vrunv("ninja", {"-v", "-C", buildir})
-        os.vrunv("ninja", {"install", "-v", "-C", buildir})
-    else
-        os.vrunv("ninja", {"-C", buildir})
-        os.vrunv("ninja", {"install", "-C", buildir})
+    local buildir = _get_buildir(opt)
+    ninja.install(package, {}, {buildir = buildir, envs = opt.envs or buildenvs(package, opt)})
+
+    -- fix static libname on windows
+    if package:is_plat("windows") and not package:config("shared") then
+        _fix_libname_on_windows(package)
     end
 end

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        print.lua
@@ -22,7 +22,7 @@
 local try       = require("sandbox/modules/try")
 local catch     = require("sandbox/modules/catch")
 
--- print format string 
+-- print format string
 function _print(format, ...)
 
     -- print format string
@@ -35,7 +35,7 @@ function _print(format, ...)
                 -- attempt to print format string first
                 io.write(string.format(format, unpack(args)) .. "\n")
             end,
-            catch 
+            catch
             {
                 function ()
                     -- print multi-variables with raw lua action

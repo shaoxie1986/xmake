@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_7z.lua
@@ -22,17 +22,17 @@
 import("lib.detect.find_program")
 import("lib.detect.find_programver")
 
--- find 7z 
+-- find 7z
 --
 -- @param opt   the argument options, e.g. {version = true}
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local 7z = find_7z()
 -- local 7z, version = find_7z({version = true})
--- 
+--
 -- @endcode
 --
 function main(opt)
@@ -42,6 +42,12 @@ function main(opt)
     opt.check   = opt.check or "--help"
     opt.command = opt.command or "--help"
     opt.parse   = "(%d+%.?%d*)%s"
+
+    -- find 7z from builtin xmake/winenv
+    if is_host("windows") then
+        opt.paths = opt.paths or {}
+        table.insert(opt.paths, path.join(os.programdir(), "winenv", "bin"))
+    end
 
     -- find program
     local program = find_program(opt.program or "7z", opt)
@@ -54,7 +60,5 @@ function main(opt)
     if program and opt and opt.version then
         version = find_programver(program, opt)
     end
-
-    -- ok?
     return program, version
 end

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        label.lua
@@ -24,6 +24,7 @@ local view      = require("ui/view")
 local event     = require("ui/event")
 local action    = require("ui/action")
 local curses    = require("ui/curses")
+local bit       = require("bit")
 
 -- define module
 local label = label or view()
@@ -42,10 +43,10 @@ function label:init(name, bounds, text)
 end
 
 -- draw view
-function label:draw(transparent)
+function label:on_draw(transparent)
 
     -- draw background
-    view.draw(self, transparent)
+    view.on_draw(self, transparent)
 
     -- get the text attribute value
     local textattr = self:textattr_val()
@@ -68,7 +69,7 @@ function label:text_set(text)
     -- set text
     text = text or ""
     local changed = self._TEXT ~= text
-    self._TEXT = text 
+    self._TEXT = text
 
     -- do action
     if changed then
@@ -94,7 +95,7 @@ function label:textattr_val()
     -- get text attribute
     local textattr = self:textattr()
     if not textattr then
-        return 
+        return
     end
 
     -- no text background? use view's background
@@ -117,7 +118,7 @@ end
 
 -- split text by width
 function label:splitext(text, width)
-    
+
     -- get width
     width = width or self:width()
 
@@ -127,8 +128,20 @@ function label:splitext(text, width)
     for idx = 1, #lines do
         local line = lines[idx]
         while #line > width do
-            table.insert(result, line:sub(1, width))
-            line = line:sub(width + 1)
+            local size = 0
+            for i = 1, #line do
+                if bit.band(line:byte(i), 0xc0) ~= 0x80 then
+                    size = size + line:wcwidth(i)
+                    if size > width then
+                        table.insert(result, line:sub(1, i - 1))
+                        line = line:sub(i)
+                        break
+                    end
+                end
+            end
+            if size <= width then
+                break
+            end
         end
         table.insert(result, line)
     end

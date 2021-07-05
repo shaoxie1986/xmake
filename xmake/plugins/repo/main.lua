@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        main.lua
@@ -26,7 +26,7 @@ import("core.platform.platform")
 import("core.package.repository")
 import("devel.git")
 import("private.async.runjobs")
-import("actions.require.impl.environment", {rootdir = os.programdir()})
+import("private.action.require.impl.environment")
 
 -- add repository url
 function _add(name, url, branch, is_global)
@@ -40,7 +40,7 @@ function _add(name, url, branch, is_global)
         os.rmdir(repodir)
     end
 
-    -- enter environment 
+    -- enter environment
     environment.enter()
 
     -- clone repository
@@ -49,9 +49,9 @@ function _add(name, url, branch, is_global)
     end
 
     -- trace
-    cprint("${color.success}add %s repository(%s): %s%s ok!", ifelse(is_global, "global", "local"), name, url, branch and (" " .. branch) or "")
+    cprint("${color.success}add %s repository(%s): %s%s ok!", (is_global and "global" or "local"), name, url, branch and (" " .. branch) or "")
 
-    -- leave environment 
+    -- leave environment
     environment.leave()
 end
 
@@ -68,13 +68,13 @@ function _remove(name, is_global)
     end
 
     -- trace
-    cprint("${bright}remove %s repository(%s): ok!", ifelse(is_global, "global", "local"), name)
+    cprint("${bright}remove %s repository(%s): ok!", (is_global and "global" or "local"), name)
 end
 
 -- update repositories
 function _update()
 
-    -- enter environment 
+    -- enter environment
     environment.enter()
 
     -- trace
@@ -89,7 +89,7 @@ function _update()
         -- get all repositories (local first)
         local repos = table.join(repository.repositories(false), repository.repositories(true))
 
-        -- pull all repositories 
+        -- pull all repositories
         local pulled = {}
         for _, repo in ipairs(repos) do
 
@@ -99,7 +99,7 @@ function _update()
             -- remove repeat and only pull the first repository
             if not pulled[repodir] then
                 if os.isdir(repodir) then
-                    
+
                     -- update the local repository with the remote url
                     if not os.isdir(repo:url()) then
 
@@ -109,7 +109,7 @@ function _update()
                         -- pull it
                         git.pull({verbose = option.get("verbose"), branch = repo:branch() or "master", repodir = repodir})
 
-                        -- mark as updated 
+                        -- mark as updated
                         io.save(path.join(repodir, "updated"), {})
                     end
                 else
@@ -119,7 +119,7 @@ function _update()
                     -- clone it
                     git.clone(repo:url(), {verbose = option.get("verbose"), branch = repo:branch() or "master", outputdir = repodir})
 
-                    -- mark as updated 
+                    -- mark as updated
                     io.save(path.join(repodir, "updated"), {})
                 end
 
@@ -128,15 +128,15 @@ function _update()
             end
         end
     end
- 
+
     -- pull repositories
     if option.get("verbose") then
         task()
     else
-        runjobs("update repo", task, {showtips = true})
+        runjobs("update repo", task, {progress = true})
     end
 
-    -- leave environment 
+    -- leave environment
     environment.leave()
 
     -- trace
@@ -156,15 +156,15 @@ function _clear(is_global)
     end
 
     -- trace
-    cprint("${color.success}clear %s repositories: ok!", ifelse(is_global, "global", "local"))
+    cprint("${color.success}clear %s repositories: ok!", (is_global and "global" or "local"))
 end
 
 -- list all repositories
-function _list()
+function _list(is_global)
 
     -- list all repositories
     local count = 0
-    for _, position in ipairs({"local", "global"}) do
+    for _, position in ipairs(is_global and "global" or {"local", "global"}) do
 
         -- trace
         print("%s repositories:", position)
@@ -214,7 +214,7 @@ function main()
         _load_project()
     end
 
-    -- add repository url 
+    -- add repository url
     if option.get("add") then
 
         _add(option.get("name"), option.get("url"), option.get("branch"), option.get("global"))
@@ -237,7 +237,7 @@ function main()
     -- list all repositories
     elseif option.get("list") then
 
-        _list()
+        _list(option.get("global"))
 
     -- show repo directory
     else

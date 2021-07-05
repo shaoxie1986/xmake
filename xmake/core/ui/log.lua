@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        log.lua
@@ -22,13 +22,14 @@
 local log = log or (function ()
 
     -- load modules
-    local os   = require("base/os")
-    local path = require("base/path")
+    local os    = require("base/os")
+    local path  = require("base/path")
+    local table = require("base/table")
 
     -- get log directory
     local logdir = nil
     if os.isfile(os.projectfile()) then
-        logdir = path.join(os.projectdir(), ".xmake")
+        logdir = path.join(os.projectdir(), "." .. xmake._NAME)
     else
         logdir = os.tmpdir()
     end

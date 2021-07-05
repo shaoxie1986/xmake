@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        shared.lua
@@ -24,88 +24,71 @@ import("core.theme.theme")
 import("core.tool.linker")
 import("core.tool.compiler")
 import("core.project.depend")
+import("private.utils.progress")
 import("object", {alias = "add_batchjobs_for_object"})
 
--- do link target 
+-- do link target
 function _do_link_target(target, opt)
 
     -- load linker instance
-    local linkinst = linker.load(target:targetkind(), target:sourcekinds(), {target = target})
+    local linkinst = linker.load(target:kind(), target:sourcekinds(), {target = target})
 
     -- get link flags
     local linkflags = linkinst:linkflags({target = target})
 
-    -- load dependent info 
-    local dependfile = target:dependfile()
-    local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
-
-    -- expand object files with *.o/obj
-    local objectfiles = {}
-    for _, objectfile in ipairs(target:objectfiles()) do
-        if objectfile:find("%*") then
-            local matchfiles = os.match(objectfile)
-            if matchfiles then
-                table.join2(objectfiles, matchfiles)
-            end
-        else
-            table.insert(objectfiles, objectfile)
-        end
-    end
+    -- get object files
+    local objectfiles = target:objectfiles()
 
     -- need build this target?
-    local depfiles = target:objectfiles()
-    for _, dep in pairs(target:deps()) do
-        if dep:targetkind() == "static" then
+    local depfiles = objectfiles
+    for _, dep in ipairs(target:orderdeps()) do
+        if dep:kind() == "static" then
+            if depfiles == objectfiles then
+                depfiles = table.copy(objectfiles)
+            end
             table.insert(depfiles, dep:targetfile())
         end
     end
+    local dryrun = option.get("dry-run")
     local depvalues = {linkinst:program(), linkflags}
-    if not depend.is_changed(dependinfo, {lastmtime = os.mtime(target:targetfile()), values = depvalues, files = depfiles}) then
-        return 
-    end
+    depend.on_changed(function ()
 
-    -- TODO make headers (deprecated)
-    local srcheaders, dstheaders = target:headers()
-    if srcheaders and dstheaders then
-        local i = 1
-        for _, srcheader in ipairs(srcheaders) do
-            local dstheader = dstheaders[i]
-            if dstheader then
-                os.cp(srcheader, dstheader)
+        -- TODO make headers (deprecated)
+        if not dryrun then
+            local srcheaders, dstheaders = target:headers()
+            if srcheaders and dstheaders then
+                local i = 1
+                for _, srcheader in ipairs(srcheaders) do
+                    local dstheader = dstheaders[i]
+                    if dstheader then
+                        os.cp(srcheader, dstheader)
+                    end
+                    i = i + 1
+                end
             end
-            i = i + 1
         end
-    end
 
-    -- the target file
-    local targetfile = target:targetfile()
+        -- the target file
+        local targetfile = target:targetfile()
 
-    -- is verbose?
-    local verbose = option.get("verbose")
+        -- is verbose?
+        local verbose = option.get("verbose")
 
-    -- trace progress info
-    local progress_prefix = "${color.build.progress}" .. theme.get("text.build.progress_format") .. ":${clear} "
-    if verbose then
-        cprint(progress_prefix .. "${dim color.build.target}linking.$(mode) %s", opt.progress, path.filename(targetfile))
-    else
-        cprint(progress_prefix .. "${color.build.target}linking.$(mode) %s", opt.progress, path.filename(targetfile))
-    end
+        -- trace progress info
+        progress.show(opt.progress, "${color.build.target}linking.$(mode) %s", path.filename(targetfile))
 
-    -- trace verbose info
-    if verbose then
-        -- show the full link command with raw arguments, it will expand @xxx.args for msvc/link on windows
-        print(linkinst:linkcmd(objectfiles, targetfile, {linkflags = linkflags, rawargs = true}))
-    end
+        -- trace verbose info
+        if verbose then
+            -- show the full link command with raw arguments, it will expand @xxx.args for msvc/link on windows
+            print(linkinst:linkcmd(objectfiles, targetfile, {linkflags = linkflags, rawargs = true}))
+        end
 
-    -- link it
-    if not option.get("dry-run") then
-        assert(linkinst:link(objectfiles, targetfile, {linkflags = linkflags}))
-    end
+        -- link it
+        if not dryrun then
+            assert(linkinst:link(objectfiles, targetfile, {linkflags = linkflags}))
+        end
 
-    -- update files and values to the dependent file
-    dependinfo.files  = depfiles
-    dependinfo.values = depvalues
-    depend.save(dependinfo, dependfile)
+    end, {dependfile = target:dependfile(), lastmtime = os.mtime(target:targetfile()), values = depvalues, files = depfiles, always_changed = dryrun})
 end
 
 -- on link the given target
@@ -167,13 +150,13 @@ function main(batchjobs, rootjob, target)
     -- add link job
     local job_link = batchjobs:addjob(target:name() .. "/link", function (index, total)
         _link_target(target, {progress = (index * 100) / total})
-    end, rootjob)
+    end, {rootjob = rootjob})
 
     -- we need only return and depend the link job for each target,
     -- so we can compile the source files for each target in parallel
     --
-    -- unless call set_values("build.across_targets_in_parallel") to disable to build across targets in parallel.
+    -- unless call set_policy("build.across_targets_in_parallel", false) to disable to build across targets in parallel.
     --
     local job_objects = add_batchjobs_for_object(batchjobs, job_link, target)
-    return target:values("build.across_targets_in_parallel") == false and job_objects or job_link, job_objects
+    return target:policy("build.across_targets_in_parallel") == false and job_objects or job_link, job_objects
 end

@@ -24,11 +24,26 @@ winenv/
 *.7z
 *.run
 
+# for compiler
+compile_commands.json
+
 # Makefile generation
 /core/xmake.config.h
 /core/.config.mak
 /core/**/*.o
 /core/**/*.b
 /core/**/*.a
+/core/**/*.obj
+/core/**/*.lib
+/core/**/*.exe
+
+# for fortran
+/tests/**/*.mod
+
+# for rpmbuild
+/scripts/rpmbuild/BUILD*/*
+/scripts/rpmbuild/RPMS/*
+/scripts/rpmbuild/SOURCES/*
+/scripts/rpmbuild/SRPMS/*
 
 !/xmake/actions/build/

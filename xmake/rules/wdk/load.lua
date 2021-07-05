@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        load.lua
@@ -71,8 +71,9 @@ function driver_kmdf(target)
     -- compile as kernel driver
     target:add("cxflags", "-kernel", {force = true})
     target:add("ldflags", "-kernel", "-driver", {force = true})
+    target:add("ldflags", "-nodefaultlib", {force = true})
 
-    -- add subsystem    
+    -- add subsystem
     target:add("ldflags", "-subsystem:native," .. os_winver.subsystem(winver), {force = true})
 
     -- set default driver entry if does not exist
@@ -111,8 +112,9 @@ function driver_wdm(target)
     -- compile as kernel driver
     target:add("cxflags", "-kernel", {force = true})
     target:add("ldflags", "-kernel", "-driver", {force = true})
+    target:add("ldflags", "-nodefaultlib", {force = true})
 
-    -- add subsystem    
+    -- add subsystem
     target:add("ldflags", "-subsystem:native," .. os_winver.subsystem(winver), {force = true})
 
     -- set default driver entry if does not exist

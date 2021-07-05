@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_tool.lua
@@ -22,11 +22,12 @@
 import("lib.detect.find_program")
 import("lib.detect.find_programver")
 import("lib.detect.find_toolname")
+import("core.base.semver")
 
 -- find tool from modules
 function _find_from_modules(name, opt)
 
-    -- attempt to import "detect.tools.find_xxx" 
+    -- attempt to import "detect.tools.find_xxx"
     local find_tool = import("detect.tools.find_" .. name, {try = true})
     if find_tool then
         local program, version, toolname = find_tool(opt)
@@ -37,31 +38,7 @@ function _find_from_modules(name, opt)
 end
 
 -- find tool
---
--- @param name      the tool name
--- @param opt       the options, e.g. {program = "xcrun -sdk macosx clang", pathes = {"/usr/bin"}, 
---                                     check = function (tool) os.run("%s -h", tool) end, version = true
---                                     force = true, cachekey = "xxx"}
---
--- @return          {name = "", program = "", version = ""} or nil
---
--- @code
---
--- local tool = find_tool("clang")
--- local tool = find_tool("clang", {program = "xcrun -sdk macosx clang"})
--- local tool = find_tool("clang", {pathes = {"/usr/bin", "/usr/local/bin"}})
--- local tool = find_tool("clang", {check = "--help"}) -- simple check command: ccache --help
--- local tool = find_tool("clang", {check = function (tool) os.run("%s -h", tool) end})
--- local tool = find_tool("clang", {pathes = {"$(env PATH)", "$(reg HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug;Debugger)"}})
--- local tool = find_tool("clang", {pathes = {"$(env PATH)", function () return "/usr/bin"end}})
--- local tool = find_tool("ccache", {version = true})
---
--- @endcode
---
-function main(name, opt)
-
-    -- init options
-    opt = opt or {}
+function _find_tool(name, opt)
 
     -- find tool name
     local toolname = find_toolname(name or opt.program)
@@ -80,7 +57,7 @@ function main(name, opt)
     -- find program
     local program = find_program(opt.program, opt)
     if not program then
-        return 
+        return
     end
 
     -- find tool version
@@ -88,7 +65,45 @@ function main(name, opt)
     if program and opt.version then
         version = find_programver(program, opt)
     end
-
-    -- ok?
     return {name = toolname, program = program, version = version}
+end
+
+-- find tool
+--
+-- @param name      the tool name
+-- @param opt       the options, e.g. {program = "xcrun -sdk macosx clang", paths = {"/usr/bin"},
+--                                     check = function (tool) os.run("%s -h", tool) end, version = true
+--                                     force = true, cachekey = "xxx", envs = {PATH = "xxx"}}
+--
+-- @return          {name = "", program = "", version = ""} or nil
+--
+-- @code
+--
+-- local tool = find_tool("clang")
+-- local tool = find_tool("clang", {program = "xcrun -sdk macosx clang"})
+-- local tool = find_tool("clang", {paths = {"/usr/bin", "/usr/local/bin"}})
+-- local tool = find_tool("clang", {check = "--help"}) -- simple check command: ccache --help
+-- local tool = find_tool("clang", {check = function (tool) os.run("%s -h", tool) end})
+-- local tool = find_tool("clang", {paths = {"$(env PATH)", "$(reg HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug;Debugger)"}})
+-- local tool = find_tool("clang", {paths = {"$(env PATH)", function () return "/usr/bin"end}})
+-- local tool = find_tool("ccache", {version = true})
+--
+-- @endcode
+--
+function main(name, opt)
+
+    -- do find
+    opt = opt or {}
+    if opt.require_version then
+        opt.version = true
+    end
+    local result = _find_tool(name, opt)
+
+    -- match version?
+    if opt.require_version and opt.require_version:find('.', 1, true) and result then
+        if not (result.version and (result.version == opt.require_version or semver.satisfies(result.version, opt.require_version))) then
+            result = nil
+        end
+    end
+    return result
 end

@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        pipe.lua
@@ -43,7 +43,7 @@ function _instance.new(cdata, name)
     return pipefile
 end
 
--- get the pipe name 
+-- get the pipe name
 function _instance:name()
     return self._NAME
 end
@@ -117,7 +117,7 @@ function _instance:write(data, opt)
     return write, errors
 end
 
--- read data from pipe 
+-- read data from pipe
 function _instance:read(size, opt)
 
     -- ensure opened
@@ -176,7 +176,7 @@ function _instance:read(size, opt)
     return read, data_or_errors
 end
 
--- connect pipe, only for named pipe (server-side) 
+-- connect pipe, only for named pipe (server-side)
 function _instance:connect(opt)
 
     -- ensure opened
@@ -265,7 +265,7 @@ function _instance:_readbuff()
     return readbuff
 end
 
--- clear the read buffer 
+-- clear the read buffer
 function _instance:_readbuff_clear()
     self._READBUFF = nil
 end
@@ -290,7 +290,7 @@ function _instance:__gc()
     end
 end
 
--- open a named pipe file 
+-- open a named pipe file
 --
 -- 1. named pipe (server-side):
 --
@@ -317,7 +317,7 @@ function pipe.open(name, mode, buffsize)
     if pipefile then
         return _instance.new(pipefile, name)
     else
-        return nil, string.format("failed to open pipe: %s, error: %s", name, errors or "unknown")
+        return nil, string.format("failed to open pipe: %s, %s", name, errors or "unknown reason")
     end
 end
 
@@ -334,7 +334,7 @@ function pipe.openpair(buffsize)
     if rpipefile and wpipefile then
         return _instance.new(rpipefile), _instance.new(wpipefile)
     else
-        return nil, nil, string.format("failed to open anonymous pipe pair, error: %s", errors or "unknown")
+        return nil, nil, string.format("failed to open anonymous pipe pair, %s", errors or "unknown reason")
     end
 end
 

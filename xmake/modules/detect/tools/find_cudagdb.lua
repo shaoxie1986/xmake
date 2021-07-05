@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      OpportunityLiu
 -- @file        find_cudagdb.lua
@@ -27,7 +27,7 @@ import("private.detect.find_cudatool")
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local cudagdb = find_cudagdb()
 -- local cudagdb, version = find_cudagdb({program = "cuda-gdb", version = true})

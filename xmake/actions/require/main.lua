@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        main.lua
@@ -24,14 +24,16 @@ import("core.base.task")
 import("core.project.config")
 import("core.project.project")
 import("core.platform.platform")
-import("list")
-import("scan")
-import("info")
-import("clean")
-import("search")
-import("export")
-import("install")
-import("uninstall")
+import("private.action.require.list")
+import("private.action.require.scan")
+import("private.action.require.info")
+import("private.action.require.fetch")
+import("private.action.require.clean")
+import("private.action.require.search")
+import("private.action.require.export")
+import("private.action.require.import", {alias = "import_packages"})
+import("private.action.require.install")
+import("private.action.require.uninstall")
 
 --
 -- the default repositories:
@@ -81,20 +83,30 @@ function main()
 
         search(option.get("requires"))
 
-    -- uninstall the installed packages 
+    -- uninstall the installed packages
     elseif option.get("uninstall") then
 
         uninstall(option.get("requires"))
-        
-    -- export the installed packages 
+
+    -- export the installed packages
     elseif option.get("export") then
 
         export(option.get("requires"))
+
+    -- import the installed packages
+    elseif option.get("import") then
+
+        import_packages(option.get("requires"))
 
     -- show the given package info
     elseif option.get("info") then
 
         info(option.get("requires"))
+
+    -- fetch the library info of the given package
+    elseif option.get("fetch") then
+
+        fetch(option.get("requires"))
 
     -- list all package dependencies in project
     elseif option.get("list") then

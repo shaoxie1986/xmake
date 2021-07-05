@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        load.lua
@@ -21,27 +21,48 @@
 -- main entry
 function main (target)
 
-    -- get app directory
+    -- get bundle directory
     local targetdir = target:targetdir()
-    local appdir = path.join(targetdir, target:basename() .. ".app")
-    target:data_set("xcode.appdir", appdir)
+    local bundledir = path.join(targetdir, target:basename() .. ".app")
+    target:data_set("xcode.bundle.rootdir", bundledir)
 
-    -- set target info for app 
+    -- get contents and resources directory
+    local contentsdir = bundledir
+    local resourcesdir = bundledir
+    if target:is_plat("macosx") then
+        contentsdir = path.join(bundledir, "Contents")
+        resourcesdir = path.join(bundledir, "Contents", "Resources")
+    end
+    target:data_set("xcode.bundle.contentsdir", contentsdir)
+    target:data_set("xcode.bundle.resourcesdir", resourcesdir)
+
+    -- set target directory for app
     target:set("kind", "binary")
     target:set("filename", target:basename())
-    if is_plat("macosx") then
-        target:set("targetdir", path.join(appdir, "Contents", "MacOS"))
-    else
-        target:set("targetdir", appdir)
+
+    -- set install directory
+    if target:is_plat("macosx") and not target:get("installdir") then
+        target:set("installdir", "/Applications")
     end
 
     -- add frameworks
-    if is_plat("macosx") then
+    if target:is_plat("macosx") then
         target:add("frameworks", "AppKit")
     else
         target:add("frameworks", "UIKit")
     end
 
     -- register clean files for `xmake clean`
-    target:add("cleanfiles", appdir)
+    target:add("cleanfiles", bundledir)
+
+    -- depend xcode.framework? we need disable `build.across_targets_in_parallel` policy
+    local across_targets_in_parallel
+    for _, dep in ipairs(target:orderdeps()) do
+        if dep:rule("xcode.framework") then
+            across_targets_in_parallel = false
+        end
+    end
+    if across_targets_in_parallel ~= nil then
+        target:set("policy", "build.across_targets_in_parallel", across_targets_in_parallel)
+    end
 end

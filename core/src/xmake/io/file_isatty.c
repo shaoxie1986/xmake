@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      OpportunityLiu
  * @file        file_isatty.c
@@ -41,7 +41,7 @@ tb_int_t xm_io_file_isatty(lua_State* lua)
     tb_assert_and_check_return_val(lua, 0);
 
     // is user data?
-    if (!lua_isuserdata(lua, 1)) 
+    if (!lua_isuserdata(lua, 1))
         xm_io_return_error(lua, "isatty(invalid file)!");
 
     // get file

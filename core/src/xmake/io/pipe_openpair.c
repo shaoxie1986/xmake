@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        pipe_openpair.c
@@ -42,17 +42,17 @@ tb_int_t xm_io_pipe_openpair(lua_State* lua)
     // check
     tb_assert_and_check_return_val(lua, 0);
 
-    // get buffer size 
+    // get buffer size
     tb_size_t buffsize = (tb_size_t)luaL_checknumber(lua, 1);
 
     // init pipe
     tb_pipe_file_ref_t pipefile[2];
     if (tb_pipe_file_init_pair(pipefile, buffsize))
     {
-        lua_pushlightuserdata(lua, (tb_pointer_t)pipefile[0]);
-        lua_pushlightuserdata(lua, (tb_pointer_t)pipefile[1]);
+        xm_lua_pushpointer(lua, (tb_pointer_t)pipefile[0]);
+        xm_lua_pushpointer(lua, (tb_pointer_t)pipefile[1]);
     }
-    else 
+    else
     {
         lua_pushnil(lua);
         lua_pushnil(lua);

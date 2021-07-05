@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_curl.lua
@@ -22,24 +22,30 @@
 import("lib.detect.find_program")
 import("lib.detect.find_programver")
 
--- find curl 
+-- find curl
 --
 -- @param opt   the argument options, e.g. {version = true}
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local curl = find_curl()
 -- local curl, version = find_curl({version = true})
--- 
+--
 -- @endcode
 --
 function main(opt)
 
     -- init options
     opt = opt or {}
-    
+
+    -- find curl from builtin xmake/winenv
+    if is_host("windows") then
+        opt.paths = opt.paths or {}
+        table.insert(opt.paths, path.join(os.programdir(), "winenv", "bin"))
+    end
+
     -- find program
     local program = find_program(opt.program or "curl", opt)
 

@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        option.lua
@@ -41,7 +41,7 @@ function sandbox_core_base_option.default(name)
     return option.default(name)
 end
 
--- get the given task menu 
+-- get the given task menu
 function sandbox_core_base_option.taskmenu(taskname)
     return option.taskmenu(taskname)
 end
@@ -54,6 +54,16 @@ end
 -- get the defaults
 function sandbox_core_base_option.defaults()
     return option.defaults() or {}
+end
+
+-- show logo
+function sandbox_core_base_option.show_logo(logo, opt)
+    option.show_logo(logo, opt)
+end
+
+-- show options
+function sandbox_core_base_option.show_options(options, taskname)
+    option.show_options(options, taskname)
 end
 
 -- parse arguments with the given options
@@ -93,27 +103,17 @@ function sandbox_core_base_option.parse(argv, options, ...)
     -- parse it
     local results, errors = option.parse(argv, options)
     if not results then
-
-        -- show help
         show_help()
-
-        -- raise errors
         raise(errors)
     end
 
     -- help?
     if results.help then
-
-        -- show help
         show_help()
-
-        -- exit
-        raise()
+        os.exit()
     else
         results.help = show_help
     end
-
-    -- ok
     return results
 end
 

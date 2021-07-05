@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -23,12 +23,11 @@ rule("objc.build")
     set_sourcekinds("mm")
     add_deps("c.build.pcheader")
     after_load(function (target)
-        if target:values("objc.build.arc") ~= false then
-            target:add("mflags", "-fobjc-arc")
-        else
+        -- deprecated, we need only use `add_mflags("-fno-objc-arc")` to override it
+        if target:values("objc.build.arc") == false then
             target:add("mflags", "-fno-objc-arc")
         end
-        if is_plat("macosx", "iphoneos", "watchos") then
+        if target:is_plat("macosx", "iphoneos", "watchos") then
             target:add("frameworks", "Foundation", "CoreFoundation")
         end
     end)
@@ -39,12 +38,11 @@ rule("objc++.build")
     set_sourcekinds("mxx")
     add_deps("c++.build.pcheader")
     after_load(function (target)
-        if target:values("objc++.build.arc") ~= false then
-            target:add("mxxflags", "-fobjc-arc")
-        else
+        -- deprecated, we need only use `add_mxxflags("-fno-objc-arc")` to override it
+        if target:values("objc++.build.arc") == false then
             target:add("mxxflags", "-fno-objc-arc")
         end
-        if is_plat("macosx", "iphoneos", "watchos") then
+        if target:is_plat("macosx", "iphoneos", "watchos") then
             target:add("frameworks", "Foundation", "CoreFoundation")
         end
     end)
@@ -62,6 +60,9 @@ rule("objc++")
     -- support `add_files("src/*.o")` and `add_files("src/*.a")` to merge object and archive files to target
     add_deps("utils.merge.object", "utils.merge.archive")
 
-    -- we attempt to extract symbols to the independent file and 
+    -- we attempt to extract symbols to the independent file and
     -- strip self-target binary if `set_symbols("debug")` and `set_strip("all")` are enabled
     add_deps("utils.symbols.extract")
+
+    -- check targets
+    add_deps("utils.check.targets")

@@ -143,7 +143,11 @@
 #define TB_CONFIG_POSIX_HAVE_OPENDIR 1
 #define TB_CONFIG_POSIX_HAVE_DLOPEN 1
 #define TB_CONFIG_POSIX_HAVE_OPEN 1
-#define TB_CONFIG_POSIX_HAVE_STAT64 1
+#if !defined(__arm64__) && !defined(__aarch64__)
+#   define TB_CONFIG_POSIX_HAVE_STAT64 1
+#else
+/* #undef TB_CONFIG_POSIX_HAVE_STAT64 */
+#endif
 #define TB_CONFIG_POSIX_HAVE_GETHOSTNAME 1
 #define TB_CONFIG_POSIX_HAVE_GETIFADDRS 1
 #define TB_CONFIG_POSIX_HAVE_SEM_INIT 1
@@ -181,8 +185,8 @@
 /* #undef TB_CONFIG_POSIX_HAVE_PIPE2 */
 #define TB_CONFIG_POSIX_HAVE_MKFIFO 1
 
-// freebsd functions
-#define TB_CONFIG_FREEBSD_HAVE_FLOCK 1
+// bsd functions
+#define TB_CONFIG_BSD_HAVE_FLOCK 1
 
 // systemv functions
 #define TB_CONFIG_SYSTEMV_HAVE_SEMGET 1

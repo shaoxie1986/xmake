@@ -263,13 +263,16 @@ tbox_C_FILES 			+= \
 						tbox/src/tbox/charset/utf32 \
 						tbox/src/tbox/charset/ucs2 \
 						tbox/src/tbox/charset/ucs4 \
-						tbox/src/tbox/charset/iso8859 
+						tbox/src/tbox/charset/iso8859
 
 iswin =
 ifeq ($(PLAT),windows)
 	iswin = yes
 endif
 ifeq ($(PLAT),msys)
+	iswin = yes
+endif
+ifeq ($(PLAT),mingw)
 	iswin = yes
 endif
 ifeq ($(PLAT),cygwin)
@@ -287,7 +290,11 @@ tbox_C_FILES 			+= \
 						tbox/src/tbox/platform/windows/interface/mswsock \
 						tbox/src/tbox/platform/windows/interface/kernel32 \
 						tbox/src/tbox/platform/windows/interface/iphlpapi \
-						tbox/src/tbox/platform/windows/interface/interface 
+						tbox/src/tbox/platform/windows/interface/interface
+endif
+ifeq ($(PLAT),iphoneos)
+tbox_M_FILES 			+= \
+						tbox/src/tbox/platform/mach/ios/directory
 endif
 
 # includes
@@ -295,7 +302,12 @@ tbox_INC_DIRS 			+= \
 						tbox/src \
 						inc/$(PLAT)
 
-										
+# use system tbox library?
+tbox_C_FILES 			:= $(if $(findstring tbox,$(base_LIBNAMES)),,$(tbox_C_FILES))
+tbox_M_FILES 			:= $(if $(findstring tbox,$(base_LIBNAMES)),,$(tbox_M_FILES))
+tbox_INC_FILES 			:= $(if $(findstring tbox,$(base_LIBNAMES)),,$(tbox_INC_FILES))
+
+
 # suffix
 include $(PRO_DIR)/suffix.mak
 

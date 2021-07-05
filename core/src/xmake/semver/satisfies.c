@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      uael
  * @file        satisfies.c
@@ -50,7 +50,7 @@ tb_int_t xm_semver_satisfies(lua_State* lua)
 
     // parse the version range string
     semver_range_t range = {0};
-    if (semver_rangen(&range, range_str, tb_strlen(range_str))) 
+    if (semver_rangen(&range, range_str, tb_strlen(range_str)))
     {
         // is branch name? try to match it
         if (!tb_strcmp(version_str, range_str))
@@ -68,7 +68,7 @@ tb_int_t xm_semver_satisfies(lua_State* lua)
 
     // try to parse the version string
     semver_t semver = {0};
-    if (semver_tryn(&semver, version_str, tb_strlen(version_str))) 
+    if (semver_tryn(&semver, version_str, tb_strlen(version_str)))
     {
         lua_pushnil(lua);
         lua_pushfstring(lua, "unable to parse semver '%s'", version_str);

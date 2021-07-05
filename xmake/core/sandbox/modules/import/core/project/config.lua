@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        config.lua
@@ -23,6 +23,7 @@ local sandbox_core_project_config = sandbox_core_project_config or {}
 
 -- load modules
 local config    = require("project/config")
+local project   = require("project/project")
 local platform  = require("platform/platform")
 local raise     = require("sandbox/modules/raise")
 
@@ -65,12 +66,12 @@ function sandbox_core_project_config.directory()
     return dir
 end
 
--- get the given configuration from the current 
+-- get the given configuration from the current
 function sandbox_core_project_config.get(name)
     return config.get(name)
 end
 
--- set the given configuration to the current 
+-- set the given configuration to the current
 --
 -- @param name  the name
 -- @param value the value
@@ -86,45 +87,26 @@ function sandbox_core_project_config.readonly(name)
 end
 
 -- load the configuration
-function sandbox_core_project_config.load(targetname)
-    return config.load(targetname)
+function sandbox_core_project_config.load(filepath)
+    return config.load(filepath)
 end
 
 -- save the configuration
-function sandbox_core_project_config.save(targetname)
-
-    -- save it
-    local ok, errors = config.save(targetname)
+function sandbox_core_project_config.save(filepath, opt)
+    local ok, errors = config.save(filepath, opt)
     if not ok then
         raise(errors)
     end
 end
 
 -- read the value from the configuration file directly
-function sandbox_core_project_config.read(name, targetname)
-    return config.read(name, targetname)
+function sandbox_core_project_config.read(name)
+    return config.read(name)
 end
 
 -- clear the configuration
 function sandbox_core_project_config.clear()
     config.clear()
-end
-
--- check the configuration
-function sandbox_core_project_config.check()
-
-    -- get the current platform 
-    local instance, errors = platform.load()
-    if instance then
-
-        -- do check
-        local on_check = instance:script("config_check")
-        if on_check then
-            on_check(instance)
-        end
-    else
-        raise(errors)
-    end
 end
 
 -- dump the configuration

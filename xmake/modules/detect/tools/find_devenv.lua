@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_devenv.lua
@@ -20,24 +20,25 @@
 
 -- imports
 import("core.project.config")
+import("core.tool.toolchain")
 
--- find devenv 
+-- find devenv
 --
 -- @param opt   the argument options, e.g. {version = true}
 --
 -- @return      program, version
 --
--- @code 
+-- @code
 --
 -- local devenv = find_devenv()
--- 
+--
 -- @endcode
 --
 function main(opt)
 
     -- not on windows?
     if not is_host("windows") then
-        return 
+        return
     end
 
     -- disable to check version
@@ -48,11 +49,12 @@ function main(opt)
     -- e.g. C:\Program Files\Microsoft Visual Studio 9.0\Common7\IDE
     --
     local program = nil
-    local vcvarsall = config.get("__vcvarsall")
-    if vcvarsall then
-        for _, vsvars in pairs(vcvarsall) do
-            if vsvars.DevEnvdir and os.isexec(path.join(vsvars.DevEnvdir, "devenv.exe")) then
-                program = path.join(vsvars.DevEnvdir, "devenv.exe")
+    local msvc = toolchain.load("msvc")
+    if msvc then
+        local vcvars = msvc:config("vcvars")
+        if vcvars then
+            if vcvars.DevEnvdir and os.isexec(path.join(vcvars.DevEnvdir, "devenv.exe")) then
+                program = path.join(vcvars.DevEnvdir, "devenv.exe")
             end
         end
     end

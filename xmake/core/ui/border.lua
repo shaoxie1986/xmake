@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        border.lua
@@ -39,10 +39,10 @@ function border:init(name, bounds)
 end
 
 -- draw border
-function border:draw(transparent)
+function border:on_draw(transparent)
 
     -- draw background (transparent)
-    view.draw(self, true)
+    view.on_draw(self, true)
 
     -- get corner attribute
     local cornerattr = self:cornerattr()
@@ -50,13 +50,13 @@ function border:draw(transparent)
     -- the left-upper attribute
     local attr_ul = curses.color_pair(cornerattr[1], self:background())
     if self:background() == cornerattr[1] then
-        attr_ul = {attr_ul, "standout"}
+        attr_ul = {attr_ul, "bold"}
     end
 
     -- the right-lower attribute
     local attr_rl = curses.color_pair(cornerattr[2], self:background())
     if self:background() == cornerattr[2] then
-        attr_rl = {attr_rl, "standout"}
+        attr_rl = {attr_rl, "bold"}
     end
 
     -- the border characters

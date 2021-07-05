@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        module.lua
@@ -164,8 +164,8 @@ function core_sandbox_module._load(dir, name, instance, module)
                     return nil, errors
                 end
 
-                -- bind main entry 
-                if result.main then
+                -- bind main entry
+                if type(result) == "table" and result.main then
                     setmetatable(result, { __call = function (_, ...) return result.main(...) end})
                 end
 
@@ -184,7 +184,7 @@ function core_sandbox_module._load(dir, name, instance, module)
                 -- save module
                 local scope = module
                 for _, modulename in ipairs(path.split(modulepath)) do
-                    
+
                     -- is end?
                     local pos = modulename:find(".lua", 1, true)
                     if pos then
@@ -198,7 +198,7 @@ function core_sandbox_module._load(dir, name, instance, module)
 
                     -- is scope?
                     else
- 
+
                         -- enter submodule
                         scope[modulename] = scope[modulename] or {}
                         scope = scope[modulename]
@@ -207,7 +207,7 @@ function core_sandbox_module._load(dir, name, instance, module)
             end
         end
     end
-    
+
     -- this module not found?
     if not module then
         return nil, string.format("module: %s not found!", name)
@@ -230,7 +230,7 @@ function core_sandbox_module._find_and_load(name, opt, instance, modules, module
     for idx, moduledir in ipairs(modules_directories) do
 
         -- find module and key
-        modulekey, isdirs = core_sandbox_module._find(moduledir, name) 
+        modulekey, isdirs = core_sandbox_module._find(moduledir, name)
         if modulekey then
 
             -- load it from cache first
@@ -243,7 +243,7 @@ function core_sandbox_module._find_and_load(name, opt, instance, modules, module
                 -- load it from the script file
                 module, errors = core_sandbox_module._load(   moduledir, name
                                                             , idx < #modules_directories and instance or nil  -- last modules need not fork sandbox
-                                                            , module) 
+                                                            , module)
 
 
                 -- cache this module
@@ -287,15 +287,17 @@ end
 
 -- get module directories
 function core_sandbox_module.directories()
-
-    -- init directories
-    local directories = core_sandbox_module._DIRS or {      path.join(global.directory(), "modules")
-                                                      ,     path.join(os.programdir(), "modules")
-                                                      ,     path.join(os.programdir(), "core/sandbox/modules/import")
-                                                      }
-                        
-    -- save directories to cache
-    core_sandbox_module._DIRS = directories
+    local directories = core_sandbox_module._DIRS
+    if not directories then
+        directories = { path.join(global.directory(), "modules"),
+                        path.join(os.programdir(), "modules"),
+                        path.join(os.programdir(), "core/sandbox/modules/import")}
+        local modulesdir = os.getenv("XMAKE_MODULES_DIR")
+        if modulesdir and os.isdir(modulesdir) then
+            table.insert(directories, 1, modulesdir)
+        end
+        core_sandbox_module._DIRS = directories
+    end
     return directories
 end
 
@@ -330,11 +332,11 @@ end
 --
 -- @return          the module instance
 --
--- e.g. 
+-- e.g.
 --
 -- import("core.platform")
 -- => platform
--- 
+--
 -- import("core.platform", {alias = "p"})
 -- => p
 --
@@ -409,7 +411,7 @@ function core_sandbox_module.import(name, opt)
         end
 
         -- load module.interface
-        if module2_name and interface_name then 
+        if module2_name and interface_name then
             found2, module2, errors2 = core_sandbox_module._find_and_load(module2_name, opt, instance, modules, modules_directories)
             if found2 and module2 and module2[interface_name] then
                 module = module2[interface_name]
@@ -440,7 +442,7 @@ function core_sandbox_module.import(name, opt)
 
     -- inherit?
     if opt.inherit then
- 
+
         -- inherit this module into the parent scope
         table.inherit2(scope_parent, module)
 
@@ -456,7 +458,7 @@ function core_sandbox_module.import(name, opt)
         -- import("core.platform.xxx", {inherit = true})
         --
         -- print(_super._g)
-        -- 
+        --
         if script ~= nil then
             setmetatable(module, {  __index = function (tbl, key)
                                         local val = rawget(tbl, key)
@@ -470,7 +472,7 @@ function core_sandbox_module.import(name, opt)
 
     end
 
-    -- bind main entry 
+    -- bind main entry
     if type(module) == "table" and module.main then
         setmetatable(module, { __call = function (_, ...) return module.main(...) end})
     end
@@ -507,7 +509,7 @@ function core_sandbox_module.get(name)
 
     -- is private object?
     if name:startswith('_') then
-        return 
+        return
     end
 
     -- get the parent scope
@@ -515,7 +517,7 @@ function core_sandbox_module.get(name)
     assert(scope_parent)
 
     -- get it
-    return scope_parent[name] 
+    return scope_parent[name]
 end
 
 -- load module

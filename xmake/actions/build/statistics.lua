@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        statistics.lua
@@ -23,9 +23,8 @@ import("core.base.option")
 import("core.base.process")
 import("core.project.config")
 import("core.platform.platform")
-import("core.platform.environment")
 import("private.action.update.fetch_version")
-import("private.action.require.packagenv")
+import("private.action.require.impl.packagenv")
 
 -- statistics is enabled?
 function _is_enabled()
@@ -68,7 +67,7 @@ function post()
     local outputdir = path.join(os.tmpdir(), "stats", os.date("%y%m%d"), projectname)
     local markfile  = outputdir .. ".mark"
     if os.isdir(outputdir) or os.isfile(markfile) or not _is_enabled() then
-        return 
+        return
     end
 
     -- mark as posted first, avoid to post it repeatly
@@ -89,7 +88,7 @@ function post()
     try
     {
         function ()
-            process.openv("xmake", argv, {stdout = path.join(os.tmpdir(), projectname .. ".stats.log")}, {detach = true}):close()
+            process.openv("xmake", argv, {stdout = path.join(os.tmpdir(), projectname .. ".stats.log"), detach = true}):close()
         end
     }
 
@@ -102,7 +101,7 @@ function main()
 
     -- in project?
     if not os.isfile(os.projectfile()) then
-        return 
+        return
     end
 
     -- load config
@@ -111,11 +110,8 @@ function main()
     -- load platform
     platform.load(config.plat())
 
-    -- enter environment
-    environment.enter("toolchains")
-
     -- enter the environments of git
-    packagenv.enter("git")
+    local oldenvs = packagenv.enter("git")
 
     -- get the project directory name
     local projectname = path.basename(os.projectdir())
@@ -143,8 +139,5 @@ function main()
     end
 
     -- leave the environments of git
-    packagenv.leave("git")
-
-    -- leave environment
-    environment.leave("toolchains")
+    os.setenvs(oldenvs)
 end

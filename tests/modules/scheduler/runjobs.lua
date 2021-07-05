@@ -11,7 +11,7 @@ function _jobfunc(index, total)
 end
 
 function main()
-    
+
     -- test callback
     print("==================================== test callback ====================================")
     local t = os.mclock()
@@ -28,24 +28,16 @@ function main()
     for i = 1, 3 do
         local job = jobs:addjob("job/" .. i, function (idx, total)
             _jobfunc(idx, total)
-        end, root)
+        end, {rootjob = root})
         for j = 1, 50 do
             jobs:addjob("job/" .. i .. "/" .. j, function (idx, total)
                 _jobfunc(idx, total)
-            end, job)
+            end, {rootjob = job})
         end
     end
     t = os.mclock()
     runjobs("test", jobs, {comax = 6, timeout = 1000, timer = function (running_jobs_indices)
         print("%s: timeout (%d ms), running: %s", scheduler.co_running(), os.mclock() - t, table.concat(running_jobs_indices, ","))
     end})
-
-    -- test tips
-    print("==================================== test tips ====================================")
-    printf("testing .. ")
-    runjobs("test", function () 
-        os.sleep(10000)
-    end, {showtips = true})
-    print("ok")
 end
 

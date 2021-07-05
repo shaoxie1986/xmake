@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        environment.lua
@@ -23,106 +23,70 @@ local environment = environment or {}
 
 -- load modules
 local os            = require("base/os")
+local table         = require("base/table")
 local global        = require("base/global")
-local platform_core = require("platform/platform")
 local sandbox       = require("sandbox/sandbox")
 local package       = require("package/package")
 local import        = require("sandbox/modules/import")
 
 -- enter the toolchains environment
 function environment._enter_toolchains()
-
-    -- save the toolchains environment
-    environment._PATH = os.getenv("PATH")
-
-    -- add $programdir/winenv/bin to $path
-    if os.host() == "windows" then
-        os.addenv("PATH", path.join(os.programdir(), "winenv", "bin"))
-    end
+    return true
 end
 
 -- leave the toolchains environment
 function environment._leave_toolchains()
-
-    -- leave the toolchains environment
-    os.setenv("PATH", environment._PATH)
-end
-
--- enter the running environment
-function environment._enter_run()
-
-    -- save the running environment
-    environment._PATH            = os.getenv("PATH")
-    environment._LD_LIBRARY_PATH = os.getenv("LD_LIBRARY_PATH")
-end
-
--- leave the running environment
-function environment._leave_run()
-
-    -- leave the running environment
-    os.setenv("PATH", environment._PATH)
-    os.setenv("LD_LIBRARY_PATH", environment._LD_LIBRARY_PATH)
+    return true
 end
 
 -- enter the environment for the current platform
 function environment.enter(name)
 
-    -- get the current platform 
-    local platform, errors = platform_core.load()
-    if not platform then
-        return false, errors
+    -- need enter?
+    local entered = environment._ENTERED or {}
+    environment._ENTERED = entered
+    if entered[name] then
+        entered[name] = entered[name] + 1
+        return true
+    else
+        entered[name] = 1
     end
 
-    -- the maps
-    local maps = {toolchains = environment._enter_toolchains, run = environment._enter_run}
-    
-    -- enter the common environment
+    -- do enter
+    local maps = {toolchains = environment._enter_toolchains}
     local func = maps[name]
     if func then
-        func()
-    end
-
-    -- enter the environment of the given platform
-    local on_enter = platform:script("environment_enter")
-    if on_enter then
-        local ok, errors = sandbox.load(on_enter, platform, name)
+        local ok, errors = func()
         if not ok then
             return false, errors
         end
     end
-
-    -- ok
     return true
 end
 
 -- leave the environment for the current platform
 function environment.leave(name)
 
-    -- get the current platform 
-    local platform, errors = platform_core.load()
-    if not platform then
-        return false, errors
+    -- need leave?
+    local entered = environment._ENTERED or {}
+    if entered[name] then
+        entered[name] = entered[name] - 1
+    end
+    if entered[name] == 0 then
+        entered[name] = nil
+    else
+        return true
     end
 
-    -- leave the environment of the given platform
-    local on_leave = platform:script("environment_leave")
-    if on_leave then
-        local ok, errors = sandbox.load(on_leave, platform, name)
+    -- do leave
+    local maps = {toolchains = environment._leave_toolchains}
+    local func = maps[name]
+    if func then
+        local ok, errors = func()
         if not ok then
             return false, errors
         end
     end
-
-    -- the maps
-    local maps = {toolchains = environment._leave_toolchains, run = environment._leave_run}
-    
-    -- leave the common environment
-    local func = maps[name]
-    if func then
-        func()
-    end
-
-    -- ok
     return true
 end
 

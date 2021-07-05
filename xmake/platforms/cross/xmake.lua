@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -22,18 +22,18 @@
 platform("cross")
 
     -- set hosts
-    set_hosts("macosx", "linux", "windows")
+    set_hosts("macosx", "linux", "windows", "bsd")
 
     -- set archs
-    set_archs("i386", "x86_64", "armv7", "armv7s", "arm64-v8a", "mips", "mips64")
+    set_archs("i386", "x86_64", "arm", "arm64", "mips", "mips64", "riscv", "riscv64", "s390x", "ppc", "ppc64", "sh4")
 
     -- set formats
-    set_formats {static = "lib$(name).a", object = "$(name).o", shared = "lib$(name).so", symbol = "$(name).sym"}
+    set_formats("static", "lib$(name).a")
+    set_formats("object", "$(name).o")
+    set_formats("shared", "lib$(name).so")
+    set_formats("symbol", "$(name).sym")
 
-    -- on check project configuration
-    on_config_check("config")
-
-    -- on load
-    on_load("load")
+    -- set toolchains
+    set_toolchains("envs", "cross")
 
 

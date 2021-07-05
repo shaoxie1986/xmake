@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        repository.lua
@@ -22,7 +22,9 @@
 local sandbox_core_package_repository = sandbox_core_package_repository or {}
 
 -- load modules
+local global        = require("base/global")
 local project       = require("project/project")
+local localcache    = require("cache/localcache")
 local repository    = require("package/repository")
 local raise         = require("sandbox/modules/raise")
 local import        = require("sandbox/modules/import")
@@ -70,29 +72,8 @@ end
 -- get all repositories from global or local directory
 function sandbox_core_package_repository.repositories(is_global)
 
-    -- add main global xmake repository
+    -- load repositories from repository cache
     local repositories = {}
-    if is_global then
-
-        -- import fasturl
-        import("net.fasturl")
-
-        -- sort main urls
-        local mainurls = {"https://github.com/xmake-io/xmake-repo.git", "https://gitlab.com/tboox/xmake-repo.git", "https://gitee.com/tboox/xmake-repo.git"}
-        fasturl.add(mainurls)
-        mainurls = fasturl.sort(mainurls)
-
-        -- add main url
-        if #mainurls > 0 then
-            local repo = repository.load("xmake-repo", mainurls[1], "master", true)
-            if repo then
-                table.insert(repositories, repo)
-            end
-        end
-    end
-
-
-    -- load repositories from repository cache 
     for name, repoinfo in pairs(table.wrap(repository.repositories(is_global))) do
         local url = repoinfo
         local branch = nil
@@ -122,6 +103,52 @@ function sandbox_core_package_repository.repositories(is_global)
                 end
             else
                 raise("invalid repository: %s", repo)
+            end
+        end
+    end
+
+    -- add global xmake repositories
+    if is_global then
+
+        -- add artifacts urls
+        local artifacts_urls = localcache.cache("repository"):get("artifacts_urls")
+        if not artifacts_urls then
+            artifacts_urls = {"https://github.com/xmake-mirror/build-artifacts.git",
+                              "https://gitlab.com/xmake-mirror/build-artifacts.git",
+                              "https://gitee.com/xmake-mirror/build-artifacts.git"}
+            if global.get("network") ~= "private" then
+                import("net.fasturl")
+                fasturl.add(artifacts_urls)
+                artifacts_urls = fasturl.sort(artifacts_urls)
+                localcache.cache("repository"):set("artifacts_urls", artifacts_urls)
+                localcache.cache("repository"):save()
+            end
+        end
+        if #artifacts_urls > 0 then
+            local repo = repository.load("build-artifacts", artifacts_urls[1], "main", true)
+            if repo then
+                table.insert(repositories, repo)
+            end
+        end
+
+        -- add main urls
+        local mainurls = localcache.cache("repository"):get("mainurls")
+        if not mainurls then
+            mainurls = {"https://github.com/xmake-io/xmake-repo.git",
+                        "https://gitlab.com/tboox/xmake-repo.git",
+                        "https://gitee.com/tboox/xmake-repo.git"}
+            if global.get("network") ~= "private" then
+                import("net.fasturl")
+                fasturl.add(mainurls)
+                mainurls = fasturl.sort(mainurls)
+                localcache.cache("repository"):set("mainurls", mainurls)
+                localcache.cache("repository"):save()
+            end
+        end
+        if #mainurls > 0 then
+            local repo = repository.load("xmake-repo", mainurls[1], "master", true)
+            if repo then
+                table.insert(repositories, repo)
             end
         end
     end

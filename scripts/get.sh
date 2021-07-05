@@ -28,6 +28,14 @@ if [ -d $tmpdir ]; then
     rm -rf $tmpdir
 fi
 
+# get make
+if gmake --version >/dev/null 2>&1
+then
+    make=gmake
+else
+    make=make
+fi
+
 remote_get_content() {
     if curl --version >/dev/null 2>&1
     then
@@ -42,7 +50,7 @@ get_host_speed() {
     if [ `uname` == "Darwin" ]; then
         ping -c 1 -t 1 $1 2>/dev/null | egrep -o 'time=\d+' | egrep -o "\d+" || echo "65535"
     else
-        ping -c 1 -W 1 $1 2>/dev/null | egrep -o 'time=\d+' | egrep -o "\d+" || echo "65535"
+        ping -c 1 -W 1 $1 2>/dev/null | grep -P -o 'time=\d+' | grep -P -o "\d+" || echo "65535"
     fi
 }
 
@@ -88,7 +96,7 @@ then
     do
         pre=$(which xmake | sed 's/\/bin\/xmake$//')
         # don't care if make exists -- if there's no make, how xmake built and installed?
-        echo "$makefile" | make -f - uninstall prefix="$pre" 2>/dev/null || echo "$makefile" | $sudoprefix make -f - uninstall prefix="$pre" || exit $?
+        echo "$makefile" | $make -f - uninstall prefix="$pre" 2>/dev/null || echo "$makefile" | $sudoprefix $make -f - uninstall prefix="$pre" || exit $?
     done
     exit
 fi
@@ -96,13 +104,13 @@ fi
 # below is installation
 # print a LOGO!
 echo 'xmake, A cross-platform build utility based on Lua.   '
-echo 'Copyright (C) 2015-2020 Ruki Wang, tboox.org, xmake.io'
+echo 'Copyright (C) 2015-present Ruki Wang, tboox.org, xmake.io'
 echo '                         _                            '
 echo '    __  ___ __  __  __ _| | ______                    '
 echo '    \ \/ / |  \/  |/ _  | |/ / __ \                   '
 echo '     >  <  | \__/ | /_| |   <  ___/                   '
 echo '    /_/\_\_|_|  |_|\__ \|_|\_\____|                   '
-echo '                         by ruki, tboox.org           '
+echo '                         by ruki, xmake.io            '
 echo '                                                      '
 echo '   👉  Manual: https://xmake.io/#/getting_started     '
 echo '   🙏  Donate: https://xmake.io/#/sponsor             '
@@ -125,14 +133,17 @@ my_exit(){
 }
 test_tools()
 {
-    prog='#include<stdio.h>\n#include<readline/readline.h>\nint main(){readline(0);return 0;}'
+    prog='#include <stdio.h>\n#include <readline/readline.h>\nint main(){readline(0);return 0;}'
     {
         git --version &&
-        make --version &&
+        $make --version &&
         {
             echo -e "$prog" | cc -xc - -o /dev/null -lreadline ||
             echo -e "$prog" | gcc -xc - -o /dev/null -lreadline ||
-            echo -e "$prog" | clang -xc - -o /dev/null -lreadline
+            echo -e "$prog" | clang -xc - -o /dev/null -lreadline ||
+            echo -e "$prog" | cc -xc - -o /dev/null -I/usr/local/include -L/usr/local/lib -lreadline ||
+            echo -e "$prog" | gcc -xc - -o /dev/null -I/usr/local/include -L/usr/local/lib -lreadline ||
+            echo -e "$prog" | clang -xc - -o /dev/null -I/usr/local/include -L/usr/local/lib -lreadline
         }
     } >/dev/null 2>&1
 }
@@ -142,10 +153,12 @@ install_tools()
     { yum --version >/dev/null 2>&1 && $sudoprefix yum install -y git readline-devel ccache && $sudoprefix yum groupinstall -y 'Development Tools'; } ||
     { zypper --version >/dev/null 2>&1 && $sudoprefix zypper --non-interactive install git readline-devel ccache && $sudoprefix zypper --non-interactive install -t pattern devel_C_C++; } ||
     { pacman -V >/dev/null 2>&1 && $sudoprefix pacman -S --noconfirm --needed git base-devel ccache; } ||
-    { pkg list-installed >/dev/null 2>&1 && $sudoprefix pkg install -y git getconf build-essential readline ccache; } ||
-    { apk --version >/dev/null 2>&1 && $sudoprefix apk add gcc g++ make readline-dev ncurses-dev libc-dev linux-headers; }
+    { emerge -V >/dev/null 2>&1 && $sudoprefix emerge -atv dev-vcs/git ccache; } ||
+    { pkg list-installed >/dev/null 2>&1 && $sudoprefix pkg install -y git getconf build-essential readline ccache; } || # termux
+    { pkg help >/dev/null 2>&1 && $sudoprefix pkg install -y git readline ccache ncurses; } || # freebsd
+    { apk --version >/dev/null 2>&1 && $sudoprefix apk add git gcc g++ make readline-dev ncurses-dev libc-dev linux-headers; }
 }
-test_tools || { install_tools && test_tools; } || my_exit "$(echo -e 'Dependencies Installation Fail\nThe getter currently only support these package managers\n\t* apt\n\t* yum\n\t* zypper\n\t* pacman\nPlease install following dependencies manually:\n\t* git\n\t* build essential like `make`, `gcc`, etc\n\t* libreadline-dev (readline-devel)\n\t* ccache (optional)')" 1
+test_tools || { install_tools && test_tools; } || my_exit "$(echo -e 'Dependencies Installation Fail\nThe getter currently only support these package managers\n\t* apt\n\t* yum\n\t* zypper\n\t* pacman\n\t* portage\nPlease install following dependencies manually:\n\t* git\n\t* build essential like `make`, `gcc`, etc\n\t* libreadline-dev (readline-devel)\n\t* ccache (optional)')" 1
 projectdir=$tmpdir
 if [ 'x__local__' = "x$branch" ]; then
     if [ -d '.git' ]; then
@@ -185,27 +198,27 @@ fi
 
 # do build
 if [ 'x__install_only__' != "x$2" ]; then
-    make -C $projectdir --no-print-directory build 
+    $make -C $projectdir --no-print-directory build 
     rv=$?
     if [ $rv -ne 0 ]
     then
-        make -C $projectdir/core --no-print-directory error
+        $make -C $projectdir/core --no-print-directory error
         my_exit "$(echo -e 'Build Fail\nDetail:\n' | cat - /tmp/xmake.out)" $rv
     fi
 fi
 
 # make bytecodes
-XMAKE_PROGRAM_DIR="$projectdir/xmake" \
-$projectdir/core/src/demo/demo.b l -v private.utils.bcsave --rootname='@programdir' -x 'scripts/**|templates/**' $projectdir/xmake || my_exit 'generate bytecode failed!'
+#XMAKE_PROGRAM_DIR="$projectdir/xmake" \
+#$projectdir/core/src/demo/demo.b l -v private.utils.bcsave --rootname='@programdir' -x 'scripts/**|templates/**' $projectdir/xmake || my_exit 'generate bytecode failed!'
 
 # do install
 if [ "$prefix" = "" ]; then
     prefix=~/.local
 fi
 if [ "x$prefix" != x ]; then
-    make -C $projectdir --no-print-directory install prefix="$prefix"|| my_exit 'Install Fail'
+    $make -C $projectdir --no-print-directory install prefix="$prefix"|| my_exit 'Install Fail'
 else
-    $sudoprefix make -C $projectdir --no-print-directory install || my_exit 'Install Fail'
+    $sudoprefix $make -C $projectdir --no-print-directory install || my_exit 'Install Fail'
 fi
 write_profile()
 {

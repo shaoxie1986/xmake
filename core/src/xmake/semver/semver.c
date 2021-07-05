@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      uael
  * @file        semver.c
@@ -62,7 +62,7 @@ tb_void_t lua_pushsemver(lua_State *lua, semver_t const* semver)
 
     tb_uchar_t i = 0;
     semver_id_t const* id = &semver->prerelease;
-    while (id && id->len) 
+    while (id && id->len)
     {
         if (id->numeric) lua_pushinteger(lua, id->num);
         else lua_pushlstring(lua, id->raw, id->len);
@@ -76,7 +76,7 @@ tb_void_t lua_pushsemver(lua_State *lua, semver_t const* semver)
     lua_pushstring(lua, "build");
     lua_newtable(lua);
     id = &semver->build;
-    while (id && id->len) 
+    while (id && id->len)
     {
         if (id->numeric) lua_pushinteger(lua, id->num);
         else lua_pushlstring(lua, id->raw, id->len);

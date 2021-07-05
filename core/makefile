@@ -38,38 +38,26 @@ endif
 all : .null
 	@echo "" > $(TMP_DIR)/$(PRO_NAME).out
 	@echo make $(PRO_NAME)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR) || cat $(TMP_DIR)/$(PRO_NAME).out
+	+@$(MAKE) --no-print-directory -C $(SRC_DIR) || cat $(TMP_DIR)/$(PRO_NAME).out
 
 # make rebuild
 rebuild : .null
-	@$(MAKE) c
-	@$(MAKE)
-	@$(MAKE) i
+	+@$(MAKE) c
+	+@$(MAKE)
+	+@$(MAKE) i
 
 # make install
 install : .null
 	@echo "" > $(TMP_DIR)/$(PRO_NAME).out
 	@echo install $(PRO_NAME)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR) install
-
-# make lipo
-lipo : .null
-	./tool/lipo $(PRO_NAME) $(DEBUG) $(SDK) $(ARCH1) $(ARCH2)
+	+@$(MAKE) --no-print-directory -C $(SRC_DIR)
+	+@$(MAKE) --no-print-directory -C $(SRC_DIR) install
 
 # make clean
 clean : .null
 	@echo "" > $(TMP_DIR)/$(PRO_NAME).out
 	@echo clean $(PRO_NAME)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR) clean
-
-# make update
-update : .null
-	@echo "" > $(TMP_DIR)/$(PRO_NAME).out
-	@echo update $(PRO_NAME)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR) update
-	@$(MAKE) --no-print-directory -C $(SRC_DIR)
-	@$(MAKE) --no-print-directory -C $(SRC_DIR) install
+	+@$(MAKE) --no-print-directory -C $(SRC_DIR) clean
 
 # make output
 output : .null
@@ -98,7 +86,7 @@ include project.mak
 # ######################################################################################
 # no-config
 # #
-all : 
+all :
 	make -r f
 	make -r r
 
@@ -119,9 +107,9 @@ update :
 	make -r f
 	make -r u
 
-output :	
-error :		
-warning :	
+output :
+error :
+warning :
 doc :
 	make -r f
 	make -r d
@@ -139,55 +127,57 @@ endif
 # #
 
 # host
-HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i linux},linux,))
+HOST 		:=$(if ${shell uname | egrep -i linux},linux,)
 HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i darwin},macosx,))
 HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i cygwin},cygwin,))
 HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i msys},msys,))
 HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i mingw},msys,))
 HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i windows},msys,))
+HOST 		:=$(if $(HOST),$(HOST),$(if ${shell uname | egrep -i bsd},bsd,))
 HOST 		:=$(if $(HOST),$(HOST),linux)
 
 # platform
-PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i linux},linux,))
+PLAT 		:=$(if ${shell uname | egrep -i linux},linux,)
 PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i darwin},macosx,))
 PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i cygwin},cygwin,))
 PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i msys},msys,))
 PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i mingw},msys,))
 PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i windows},windows,))
+PLAT 		:=$(if $(PLAT),$(PLAT),$(if ${shell uname | egrep -i bsd},bsd,))
 PLAT 		:=$(if $(PLAT),$(PLAT),linux)
 
 # architecture
-ifeq ($(ARCH),)
+ifeq ($(BUILD_ARCH),)
 ifneq ($(MSYSTEM_CARCH),)
 MSYSARCH 	:= $(if $(findstring mingw32,$(shell which gcc)),i386,$(MSYSTEM_CARCH))
 else
 MSYSARCH 	:= x$(shell getconf LONG_BIT)
 endif
-ARCH 		:=$(if $(findstring windows,$(PLAT)),x86,$(ARCH))
-ARCH 		:=$(if $(findstring msys,$(PLAT)),$(MSYSARCH),$(ARCH))
-ARCH 		:=$(if $(findstring cygwin,$(PLAT)),x$(shell getconf LONG_BIT),$(ARCH))
-ARCH 		:=$(if $(findstring macosx,$(PLAT)),x$(shell getconf LONG_BIT),$(ARCH))
-ARCH 		:=$(if $(findstring linux,$(PLAT)),x$(shell getconf LONG_BIT),$(ARCH))
-ARCH 		:=$(if $(findstring iphoneos,$(PLAT)),armv7,$(ARCH))
-ARCH 		:=$(if $(findstring android,$(PLAT)),armv7,$(ARCH))
-ARCH 		:=$(if $(findstring i686,$(ARCH)),i386,$(ARCH)) # from msys/mingw32
-ARCH 		:=$(if $(findstring x32,$(ARCH)),i386,$(ARCH))
-ARCH 		:=$(if $(findstring x64,$(ARCH)),x86_64,$(ARCH))
+BUILD_ARCH 	:=$(if $(findstring windows,$(PLAT)),x86,$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring msys,$(PLAT)),$(MSYSARCH),$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring cygwin,$(PLAT)),x$(shell getconf LONG_BIT),$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring macosx,$(PLAT)),$(shell uname -m),$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring linux,$(PLAT)),$(shell uname -m),$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring bsd,$(PLAT)),x$(shell getconf LONG_BIT),$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring iphoneos,$(PLAT)),arm64,$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring android,$(PLAT)),armv7,$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring i686,$(BUILD_ARCH)),i386,$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring x32,$(BUILD_ARCH)),i386,$(BUILD_ARCH))
+BUILD_ARCH 	:=$(if $(findstring x64,$(BUILD_ARCH)),x86_64,$(BUILD_ARCH))
 
-# for arm linux? 
-ifeq ($(PLAT),linux)
+# on termux/ci
 ifneq ($(TERMUX_ARCH),)
-ARCHSTR 	:= $(TERMUX_ARCH) # on termux/ci
-else
-ARCHSTR 	:= $(shell uname -m) # on arm device, e.g. termux app
-endif
-ARCH 		:= $(if $(findstring aarch64,$(ARCHSTR)),arm64,$(ARCH))
-ARCH 		:= $(if $(findstring arm64,$(ARCHSTR)),arm64,$(ARCH))
-ARCH 		:= $(if $(findstring armv7,$(ARCHSTR)),armv7,$(ARCH))
-ARCH 		:= $(if $(findstring arm,$(ARCHSTR)),arm,$(ARCH))
-ARCH 		:= $(if $(findstring i686,$(ARCHSTR)),i386,$(ARCH)) 
+BUILD_ARCH 	:= $(TERMUX_ARCH)
 endif
 endif
+
+# translate architecture, e.g. armhf/armv7l -> arm, arm64-v8a -> arm64
+BUILD_ARCH 	:= $(if $(findstring aarch64,$(BUILD_ARCH)),arm64,$(BUILD_ARCH))
+BUILD_ARCH 	:= $(if $(findstring arm64,$(BUILD_ARCH)),arm64,$(BUILD_ARCH))
+ifneq ($(BUILD_ARCH),arm64)
+BUILD_ARCH 	:= $(if $(findstring arm,$(BUILD_ARCH)),arm,$(BUILD_ARCH))
+endif
+BUILD_ARCH 	:= $(if $(findstring i686,$(BUILD_ARCH)),i386,$(BUILD_ARCH))
 
 # debug
 DEBUG 		:=$(if $(DEBUG),$(DEBUG),n)
@@ -207,22 +197,22 @@ DEMO 		:=$(if $(DEMO),$(DEMO),y)
 PROF 		:=$(if $(PROF),$(PROF),n)
 
 # arm
-ARM 		:=$(if $(findstring arm,$(ARCH)),y,n)
+ARM 		:=$(if $(findstring arm,$(BUILD_ARCH)),y,n)
 
 # x86
-x86 		:=$(if $(findstring i386,$(ARCH)),y,n)
+x86 		:=$(if $(findstring i386,$(BUILD_ARCH)),y,n)
 
 # x64
-x64 		:=$(if $(findstring x86_64,$(ARCH)),y,n)
+x64 		:=$(if $(findstring x86_64,$(BUILD_ARCH)),y,n)
 
 # sh4
-SH4 		:=$(if $(findstring sh4,$(ARCH)),y,n)
+SH4 		:=$(if $(findstring sh4,$(BUILD_ARCH)),y,n)
 
 # mips
-MIPS 		:=$(if $(findstring mips,$(ARCH)),y,n)
+MIPS 		:=$(if $(findstring mips,$(BUILD_ARCH)),y,n)
 
 # sparc
-SPARC 		:=$(if $(findstring sparc,$(ARCH)),y,n)
+SPARC 		:=$(if $(findstring sparc,$(BUILD_ARCH)),y,n)
 
 # the project directory
 PRO_DIR		:=$(abspath .)
@@ -237,15 +227,21 @@ TOOL_DIR 	:= $(PRO_DIR)/tool
 CXFLAG		:= $(if $(CXFLAG),$(CXFLAG),)
 
 # ccache
-CCACHE		:= 
-DISTCC		:= 
+CCACHE		:=
+DISTCC		:=
 
 # sed
 ifeq ($(HOST),macosx)
-#SED			:= sed -i ''
 SED			:= perl -pi -e
+SEDX		:= perl -p -e
+else
+ifeq ($(HOST),bsd)
+SED			:= perl -pi -e
+SEDX		:= perl -p -e
 else
 SED			:= sed -i
+SEDX		:= sed
+endif
 endif
 
 # echo
@@ -255,18 +251,15 @@ endif
 ifeq ($(HOST),linux)
 SHELL 		= bash
 endif
+ifeq ($(HOST),bsd)
+SHELL 		= bash
+endif
 ECHO 		:= echo -e
 
-# make upper 
-ifeq ($(HOST),macosx)
+# make upper
 define MAKE_UPPER
-${shell echo $(1) | perl -p -e "s/(.*)/\U\1/g"}
+${shell echo $(1) | $(SEDX) "s/\(.*\)/\U\1/g"}
 endef
-else
-define MAKE_UPPER
-${shell echo $(1) | sed "s/\(.*\)/\U\1/g"}
-endef
-endif
 
 # config base
 ifeq ($(PLAT),macosx)
@@ -275,15 +268,21 @@ base_LIBNAMES 	:= curses readline m dl pthread
 endif
 
 ifeq ($(PLAT),windows)
-base_LIBPATH 	:= 
+base_LIBPATH 	:=
 base_LIBNAMES 	:= ws2_32
 endif
 
 ifeq ($(PLAT),linux)
 base_LIBPATH 	:=
-base_LIBNAMES 	:= 
-base_LIBNAMES 	+= $(shell if { cat detect/curses.c | $(CC) -xc - -lcurses -ltinfo -o /dev/null 2>/dev/null; }; then echo curses tinfo; fi ) 
-base_LIBNAMES 	+= $(shell if { cat detect/readline.c | $(CC) -xc - -lreadline -o /dev/null 2>/dev/null; }; then echo readline; fi ) 
+base_LIBNAMES 	:=
+base_LIBNAMES 	+= $(shell if { cat detect/curses.c | $(CC) -xc - -lcurses -ltinfo -o /dev/null 2>/dev/null; }; then echo curses tinfo; fi )
+base_LIBNAMES 	+= $(shell if { cat detect/readline.c | $(CC) -xc - -lreadline -o /dev/null 2>/dev/null; }; then echo readline; fi )
+base_LIBNAMES 	+= $(shell if { cat detect/tbox.c | $(CC) -xc - -ltbox -o /dev/null 2>/dev/null; }; then echo tbox; fi )
+base_LIBNAMES 	+= $(shell if { cat detect/lua-cjson.c | $(CC) -xc - -llua5.1-cjson -lluajit-5.1 -o /dev/null 2>/dev/null; }; then echo lua5.1-cjson; fi )
+base_LIBNAMES 	+= $(shell if { cat detect/sv.c | $(CC) -xc - -lsv -o /dev/null 2>/dev/null; }; then echo sv; fi )
+ifeq ($(LUAJIT_SYSTEM),y)
+base_LIBNAMES 	+= $(shell if { cat detect/luajit.c | $(CC) -xc - $(shell pkg-config --libs --cflags luajit) -o /dev/null 2>/dev/null; }; then echo luajit-5.1; fi )
+endif
 ifneq ($(TERMUX_ARCH),) # on termux/ci?
 base_LIBNAMES 	+= m dl
 else
@@ -291,11 +290,25 @@ base_LIBNAMES 	+= m dl pthread
 endif
 endif
 
+ifeq ($(PLAT),bsd)
+base_LIBPATH 	:=
+base_LIBNAMES 	:=
+base_LIBNAMES 	+= $(shell if { cat detect/curses.c | $(CC) -xc - -lcurses -ltinfo -o /dev/null 2>/dev/null; }; then echo curses tinfo; fi )
+base_LIBNAMES 	+= $(shell if { cat detect/readline.c | $(CC) -xc - -lreadline -o /dev/null 2>/dev/null; }; then echo readline; fi )
+base_LIBNAMES 	+= m dl pthread
+endif
+
 # check jit compiler
 ifeq ($(PLAT),linux)
 luajit_JIT :=$(shell if [ -f "/etc/redhat-release" ]; then echo "nojit"; else echo "jit"; fi )
+ifeq ($(BUILD_ARCH),mips64) # maybe it is not very stable yet, we need to disable it
+luajit_JIT :=nojit
+endif
 else
 luajit_JIT :=jit
+endif
+ifeq ($(PLAT),iphoneos)
+luajit_JIT :=nojit
 endif
 
 # select package directory
@@ -339,7 +352,7 @@ config : .null
 	@$(ECHO) "============================================================================="
 	@$(ECHO) "compile:"
 	@$(ECHO) "    plat:\t\t"$(PLAT)
-	@$(ECHO) "    arch:\t\t"$(ARCH)
+	@$(ECHO) "    arch:\t\t"$(BUILD_ARCH)
 	@$(ECHO) "    host:\t\t"$(HOST)
 	@$(ECHO) "    demo:\t\t"$(DEMO)
 	@$(ECHO) "    prof:\t\t"$(PROF)
@@ -347,6 +360,7 @@ config : .null
 	@$(ECHO) "    small:\t\t"$(SMALL)
 	@$(ECHO) "    ccache:\t\t"$(CCACHE)
 	@$(ECHO) "    distcc:\t\t"$(DISTCC)
+	@$(ECHO) "    luajit:\t\t"$(luajit_JIT)
 	@$(ECHO) ""
 	@$(ECHO) "packages:"
 	@$(ECHO) ""$(foreach name, $(PKG_NAMES), $(call MAKE_PACKAGE_INFO,$(name)))
@@ -430,14 +444,14 @@ config : .null
 	@$(ECHO) "export "$(call MAKE_UPPER,$(PLAT)) 		>> .config.mak
 	@$(ECHO) ""											>> .config.mak
 	@$(ECHO) "# architecture"							>> .config.mak
-	@$(ECHO) "ARCH ="$(ARCH)							>> .config.mak
+	@$(ECHO) "BUILD_ARCH ="$(BUILD_ARCH)				>> .config.mak
 	@$(ECHO) "ARM ="$(ARM)								>> .config.mak
 	@$(ECHO) "x86 ="$(x86)								>> .config.mak
 	@$(ECHO) "x64 ="$(x64)								>> .config.mak
 	@$(ECHO) "SH4 ="$(SH4)								>> .config.mak
 	@$(ECHO) "MIPS ="$(MIPS)							>> .config.mak
 	@$(ECHO) "SPARC ="$(SPARC)							>> .config.mak
-	@$(ECHO) "export ARCH"								>> .config.mak
+	@$(ECHO) "export BUILD_ARCH"						>> .config.mak
 	@$(ECHO) "export ARM"								>> .config.mak
 	@$(ECHO) "export x86"								>> .config.mak
 	@$(ECHO) "export x64"								>> .config.mak

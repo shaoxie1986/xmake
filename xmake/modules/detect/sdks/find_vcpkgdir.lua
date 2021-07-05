@@ -11,96 +11,54 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        find_vcpkgdir.lua
 --
 
 -- imports
-import("lib.detect.cache")
-import("lib.detect.find_file")
 import("core.base.option")
 import("core.base.global")
 import("core.project.config")
+import("core.cache.detectcache")
+import("lib.detect.find_tool")
 
--- find vcpkg directory
-function _find_vcpkgdir(sdkdir)
-
-    -- init the search directories
-    local pathes = {}
-    if sdkdir then
-        table.insert(pathes, sdkdir)
-    end
-    if is_host("windows") then
-        -- attempt to read path info after running `vcpkg integrate install`
-        local pathfile = "~/../Local/vcpkg/vcpkg.path.txt"
-        if os.isfile(pathfile) then
-            local dir = io.readfile(pathfile):trim()
-            if os.isdir(dir) then
-                table.insert(pathes, dir)
+-- find vcpkgdir
+function main()
+    local vcpkgdir = detectcache:get("detect.sdks.find_vcpkgdir")
+    if vcpkgdir == nil then
+        if not vcpkgdir then
+            vcpkgdir = config.get("vcpkg") or global.get("vcpkg")
+            if vcpkgdir then
+                if os.isfile(vcpkgdir) then
+                    vcpkgdir = path.directory(vcpkgdir)
+                end
             end
         end
-    else
-        -- TODO
-    end
-
-    -- attempt to find vcpkg
-    local vcpkg = find_file(is_host("windows") and "vcpkg.exe" or "vcpkg", pathes)
-    if vcpkg then
-        return path.directory(vcpkg)
-    end
-end
-
--- find vcpkg directory
---
--- @param sdkdir    the vcpkg directory
--- @param opt       the argument options, e.g. {verbose = true, force = false} 
---
--- @return          the vcpkg directory
---
--- @code 
---
--- local vcpkgdir = find_vcpkgdir()
--- 
--- @endcode
---
-function main(sdkdir, opt)
-
-    -- init arguments
-    opt = opt or {}
-
-    -- attempt to load cache first
-    local key = "detect.sdks.find_vcpkgdir." .. (sdkdir or "")
-    local cacheinfo = cache.load(key)
-    if not opt.force and cacheinfo.vcpkg ~= nil then
-        return cacheinfo.vcpkg
-    end
-       
-    -- find vcpkg
-    local vcpkg = _find_vcpkgdir(sdkdir or config.get("vcpkg") or global.get("vcpkg"))
-    if vcpkg then
-
-        -- save to config
-        config.set("vcpkg", vcpkg, {force = true, readonly = true})
-
-        -- trace
-        if opt.verbose or option.get("verbose") then
-            cprint("checking for the vcpkg directory ... ${color.success}%s", vcpkg)
+        if not vcpkgdir then
+            vcpkgdir = os.getenv("VCPKG_ROOT") or os.getenv("VCPKG_INSTALLATION_ROOT")
         end
-    else
-
-        -- trace
-        if opt.verbose or option.get("verbose") then
-            cprint("checking for the vcpkg directory ... ${color.nothing}${text.nothing}")
+        if not vcpkgdir and is_host("macosx", "linux") then
+            local brew = find_tool("brew")
+            if brew then
+                dir = try
+                {
+                    function ()
+                        return os.iorunv(brew.program, {"--prefix", "vcpkg"})
+                    end
+                }
+            end
+            if dir then
+                dir = path.join(dir:trim(), "libexec")
+                if os.isdir(path.join(dir, "installed")) then
+                    vcpkgdir = dir
+                end
+            end
         end
+        detectcache:set("detect.sdks.find_vcpkgdir", vcpkgdir or false)
+        detectcache:save()
     end
-
-    -- save to cache
-    cacheinfo.vcpkg = vcpkg or false
-    cache.save(key, cacheinfo)
-
-    -- ok?
-    return vcpkg
+    return vcpkgdir or nil
 end

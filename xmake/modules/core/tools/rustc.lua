@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        rustc.lua
@@ -25,15 +25,15 @@ import("core.project.project")
 
 -- init it
 function init(self)
-    
+
     -- init arflags
-    self:set("rc-arflags", "--crate-type=lib")
+    self:set("rcarflags", "--crate-type=lib")
 
     -- init shflags
-    self:set("rc-shflags", "--crate-type=dylib")
+    self:set("rcshflags", "--crate-type=dylib")
 
     -- init ldflags
-    self:set("rc-ldflags", "--crate-type=bin")
+    self:set("rcldflags", "--crate-type=bin")
 
     -- init the file formats
     self:set("formats", { static = "lib$(name).rlib" })
@@ -43,8 +43,8 @@ end
 function nf_optimize(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         none        = "-C opt-level=0"
     ,   fast        = "-C opt-level=1"
     ,   faster      = "-C opt-level=2"
@@ -54,25 +54,25 @@ function nf_optimize(self, level)
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the symbol flag
 function nf_symbol(self, level)
 
     -- the maps
-    local maps = 
-    {   
+    local maps =
+    {
         debug = "-C debuginfo=2"
     }
 
     -- make it
-    return maps[level] 
+    return maps[level]
 end
 
 -- make the linkdir flag
 function nf_linkdir(self, dir)
-    return "-L" .. os.args(dir)
+    return {"-L" .. dir}
 end
 
 -- make the build arguments list

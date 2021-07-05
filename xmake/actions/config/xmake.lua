@@ -12,7 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        xmake.lua
@@ -41,31 +41,19 @@ task("config")
                 -- options
             ,   options =
                 {
-                    {'c', "clean",      "k",    nil     ,   "Clean the cached configure and configure all again."           }
-                ,   {nil, "menu",       "k",    nil     ,   "Configure project with a menu-driven user interface."          }
-                ,   {nil, "require",    "kv",   nil     ,   "Require all dependent packages?"
-                                                        ,   values = function (complete)
-                                                                if complete then
-                                                                    return {"yes", "no"}
-                                                                else
-                                                                    return {"y: force to enable", "n: disable" }
-                                                                end
-                                                            end                                                             }
-                ,   {nil, "trybuild",   "kv",   nil     ,   "Enable try-build mode and set the third-party buildsystem tool.",
-                                                            "e.g.",
-                                                            "    - xmake f --trybuild=auto; xmake",
-                                                            "    - xmake f --trybuild=autotools -p android --ndk=xxx; xmake",
-                                                            "",
-                                                            "the third-party buildsystems:"
-                                                        ,   values = {"auto", "make", "autotools", "cmake", "scons", "meson", "bazel", "ninja", "msbuild", "xcodebuild", "ndkbuild"}}
-                ,   {nil, "tryconfigs", "kv",   nil     ,   "Set the extra configurations of the third-party buildsystem for the try-build mode.",
-                                                            "e.g.",
-                                                            "    - xmake f --trybuild=autotools --tryconfigs='--enable-shared=no'"}
+                    {'c', "clean",      "k",  nil       ,   "Clean the cached configure and configure all again."           }
+                ,   {nil, "export",     "kv", nil       ,   "Export the current configuration to the given file."
+                                                        ,   "    e.g."
+                                                        ,   "    - xmake f -m debug -xxx=y --export=build/config.txt"         }
+                ,   {nil, "import",     "kv", nil       ,   "Import configuration from the given file."
+                                                        ,   "    e.g."
+                                                        ,   "    - xmake f -import=build/config.txt"                          }
+                ,   {nil, "menu",       "k",  nil       ,   "Configure project with a menu-driven user interface."          }
                 ,   {category = "."}
-                ,   {'p', "plat",       "kv", "$(subhost)" , "Compile for the given platform."
+                ,   {'p', "plat",       "kv", "auto"    , "Compile for the given platform."
                                                         ,   values = function (complete, opt)
 
-                                                                -- import
+                                                                -- imports
                                                                 import("core.platform.platform")
                                                                 import("core.base.hashset")
 
@@ -87,10 +75,10 @@ task("config")
                                                             -- show the description of all architectures
                                                             function ()
 
-                                                                -- import platform
+                                                                -- imports
                                                                 import("core.platform.platform")
 
-                                                                -- make description
+                                                                -- get all architectures
                                                                 local description = {}
                                                                 for i, plat in ipairs(platform.plats()) do
                                                                     local archs = platform.archs(plat)
@@ -101,20 +89,17 @@ task("config")
                                                                         end
                                                                     end
                                                                 end
-
-                                                                -- get it
                                                                 return description
                                                             end
                                                         ,   values = function (complete, opt)
                                                                 if not complete then return end
 
-                                                                -- import
+                                                                -- imports
                                                                 import("core.platform.platform")
                                                                 import("core.base.hashset")
 
-                                                                -- get archs
+                                                                -- get all architectures
                                                                 local archset = hashset.new()
-
                                                                 for _, plat in ipairs(opt.plat and { opt.plat } or platform.plats()) do
                                                                     local archs = platform.archs(plat)
                                                                     if archs then
@@ -123,25 +108,34 @@ task("config")
                                                                         end
                                                                     end
                                                                 end
-
-                                                                -- get it
                                                                 return archset:to_array()
                                                             end                                                             }
                 ,   {'m', "mode",       "kv", "release" ,   "Compile for the given mode."
                                                         ,   values = function (complete)
-                                                                
-                                                                local modes = (try { function()
-                                                                    return import("core.project.project").modes()
-                                                                end }) or {"debug", "release"}
-                                                                table.sort(modes)
-                                                                if not complete then
-                                                                    table.insert(modes, "... (custom)")
+                                                                if complete then
+                                                                    local modes = (try { function()
+                                                                        return import("core.project.project").modes()
+                                                                    end }) or {"debug", "release"}
+                                                                    return modes
                                                                 end
-                                                                return modes
                                                             end                                                             }
                 ,   {'k', "kind",       "kv", "static"  ,   "Compile for the given target kind."
                                                         ,   values = {"static", "shared", "binary"}                         }
-                ,   {nil, "host",       "kv", "$(host)" ,   "The Current Host Environment."                                 }
+                ,   {nil, "host",       "kv", "$(host)" ,   "Set the current host environment."                             }
+
+                    -- package configuration
+                ,   {category = "Package Configuration"}
+                ,   {nil, "require",    "kv",   nil     ,   "Require all dependent packages?"
+                                                        ,   values = function (complete)
+                                                                if complete then
+                                                                    return {"yes", "no"}
+                                                                else
+                                                                    return {"y: force to enable", "n: disable" }
+                                                                end
+                                                            end                                                             }
+                ,   {nil, "pkg_searchdirs", "kv", nil       , "The search directories of the remote package."
+                                                            , "    e.g."
+                                                            , "    - xmake f --pkg_searchdirs=/dir1" .. path.envsep() .. "/dir2"}
 
                     -- show project menu options
                 ,   function ()
@@ -154,18 +148,30 @@ task("config")
                     end
 
                 ,   {category = "Cross Complation Configuration"}
-                ,   {nil, "cross",      "kv", nil,          "The Cross Toolchains Prefix"
+                ,   {nil, "cross",      "kv", nil,          "Set cross toolchains prefix"
                                                           , "e.g."
                                                           , "    - i386-mingw32-"
                                                           , "    - arm-linux-androideabi-"                                  }
-                ,   {nil, "bin",        "kv", nil,          "The Cross Toolchains Bin Directory"
+                ,   {nil, "target_os",  "kv", nil,          "Set target os only for cross-complation"                       }
+                ,   {nil, "bin",        "kv", nil,          "Set cross toolchains bin directory"
                                                           , "e.g."
                                                           , "    - sdk/bin (/arm-linux-gcc ..)"                             }
-                ,   {nil, "sdk",        "kv", nil,          "The Cross SDK Directory"
+                ,   {nil, "sdk",        "kv", nil,          "Set cross SDK directory"
                                                           , "e.g."
                                                           , "    - sdk/bin"
                                                           , "    - sdk/lib"
                                                           , "    - sdk/include"                                             }
+                ,   {nil, "toolchain",  "kv", nil,          "Set toolchain name"
+                                                          , "e.g. "
+                                                          , "    - xmake f --toolchain=clang"
+                                                          , "    - xmake f --toolchain=[cross|llvm|sdcc ..] --sdk=/xxx"
+                                                          , "    - run `xmake show -l toolchains` to get all toolchains"
+                                                          , values = function (complete, opt)
+                                                                if complete then
+                                                                    import("core.tool.toolchain")
+                                                                    return toolchain.list()
+                                                                end
+                                                            end                                                             }
 
                     -- show language menu options
                 ,   function ()
@@ -188,17 +194,23 @@ task("config")
                     end
 
                 ,   {category = "Other Configuration"}
-                ,   {nil, "debugger",   "kv", "auto"    , "The Debugger"                                                    }
+                ,   {nil, "debugger",   "kv", "auto"    , "Set debugger"                                                    }
                 ,   {nil, "ccache",     "kv", true      , "Enable or disable the c/c++ compiler cache."                     }
-                ,   {'o', "buildir",    "kv", "build"   , "Set the build directory."                                        }
+                ,   {nil, "trybuild",   "kv",   nil     ,   "Enable try-build mode and set the third-party buildsystem tool.",
+                                                            "e.g.",
+                                                            "    - xmake f --trybuild=auto; xmake",
+                                                            "    - xmake f --trybuild=autotools -p android --ndk=xxx; xmake",
+                                                            "",
+                                                            "the third-party buildsystems:"
+                                                        ,   values = {"auto", "make", "autotools", "cmake", "scons", "meson", "bazel", "ninja", "msbuild", "xcodebuild", "ndkbuild"}}
+                ,   {nil, "tryconfigs", "kv",   nil     ,   "Set the extra configurations of the third-party buildsystem for the try-build mode.",
+                                                            "e.g.",
+                                                            "    - xmake f --trybuild=autotools --tryconfigs='--enable-shared=no'"}
+                ,   {'o', "buildir",    "kv", "build"   , "Set build directory."                                            }
 
                 ,   {}
                 ,   {nil, "target",     "v" , nil       , "Configure for the given target."
-                                                        , values = function ()
-                                                            return try { function ()
-                                                                return table.keys(import("core.project.project").targets())
-                                                            end }
-                                                        end                                                                 }
+                                                        , values = function (complete, opt) return import("private.utils.complete_helper.targets")(complete, opt) end }
                 }
             }
 

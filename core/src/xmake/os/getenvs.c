@@ -11,8 +11,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * Copyright (C) 2015-2020, TBOOX Open Source Group.
+ *
+ * Copyright (C) 2015-present, TBOOX Open Source Group.
  *
  * @author      ruki
  * @file        getenvs.c
@@ -68,7 +68,7 @@ tb_int_t xm_os_getenvs(lua_State* lua)
     tb_wchar_t const* p = (tb_wchar_t const*)GetEnvironmentStringsW();
     if (p)
     {
-        tb_int_t    i = 0;
+        tb_int_t    i = 1;
         tb_char_t*  data = tb_null;
         tb_size_t   maxn = 0;
         tb_char_t   line[TB_PATH_MAXN];
@@ -111,14 +111,14 @@ tb_int_t xm_os_getenvs(lua_State* lua)
     }
 #else
     tb_char_t const** p = (tb_char_t const**)environ;
-    if (p) 
+    if (p)
     {
-        tb_int_t  i = 0;
+        tb_int_t  i = 1;
         tb_size_t n = 0;
-        while (*p) 
+        while (*p)
         {
             n = tb_strlen(*p);
-            if (n) 
+            if (n)
             {
                 lua_pushstring(lua, *p);
                 lua_rawseti(lua, -2, i++);

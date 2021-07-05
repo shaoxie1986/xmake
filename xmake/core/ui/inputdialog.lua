@@ -11,8 +11,8 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
--- 
--- Copyright (C) 2015-2020, TBOOX Open Source Group.
+--
+-- Copyright (C) 2015-present, TBOOX Open Source Group.
 --
 -- @author      ruki
 -- @file        inputdialog.lua
@@ -45,7 +45,6 @@ function inputdialog:init(name, bounds, title)
     self:text():bounds().ey = 1
     self:text():invalidate(true)
     self:text():option_set("selectable", false)
-    self:text():option_set("progress", false)
 
     -- text changed
     self:text():action_set(action.ac_on_text_changed, function (v)
@@ -58,6 +57,11 @@ function inputdialog:init(name, bounds, title)
                 self:textedit():invalidate(true)
             end
         end
+    end)
+
+    -- on resize for panel
+    self:panel():action_add(action.ac_on_resized, function (v)
+        self:textedit():bounds_set(rect{0, 1, v:width(), v:height() - 1})
     end)
 end
 
